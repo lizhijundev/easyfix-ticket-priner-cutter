@@ -1,3 +1,5 @@
+USB 热敏打印切纸程序
+
 ## 打包
 
 ```
@@ -10,8 +12,11 @@ pyinstaller --noconfirm --onefile --windowed --icon=assets/app_icon.icns app.py
 参数说明：
 
 --onefile：将所有依赖打包到一个独立的文件。
+
 --windowed：隐藏应用运行时的终端窗口。
+
 --icon：指定应用的图标文件。
+
 打包完成后，生成的 .app 文件位于 dist 文件夹中。
 
 ### 测试打包后的应用

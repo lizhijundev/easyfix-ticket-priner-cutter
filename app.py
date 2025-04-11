@@ -3,6 +3,8 @@ import os
 import tkinter as tk
 from tkinter import messagebox
 import serial
+import tempfile
+import os
 
 
 def list_printers():
@@ -24,24 +26,39 @@ def list_printers():
 
 def send_cut_command_to_usb(device_uri):
     """
-    发送 ESC/POS 切纸指令到指定的 USB 打印机。
-    使用设备 URI 解析端口路径。
+    使用 CUPS 打印服务发送切纸指令到 USB 打印机。
     """
     try:
-        # 提取设备路径（例如：/dev/ttyUSB0）
-        if "usb://" in device_uri:
-            # 获取设备端口（macOS 的 USB 打印机通常无法直接从 device-uri 获取具体端口）
-            printer_port = "/dev/ttyUSB0"  # 默认端口，需要替换为实际的端口
-        else:
-            raise ValueError(f"无法识别的设备 URI: {device_uri}")
+        conn = cups.Connection()
 
-        # 打开 USB 端口并发送切纸命令
-        with serial.Serial(printer_port, baudrate=9600, timeout=1) as printer:
-            cut_command = b'\x1D\x56\x00'  # ESC/POS 完整切纸
-            printer.write(cut_command)
-            messagebox.showinfo("成功", f"切纸指令已发送到打印机端口: {printer_port}")
+        # ESC/POS 切纸命令
+        cut_command = b'\x1D\x56\x00'
+
+        # 使用 CUPS 打印服务查找对应的打印机名称
+        printer_name = None
+        for name, info in conn.getPrinters().items():
+            if info["device-uri"] == device_uri:
+                printer_name = name
+                break
+
+        if not printer_name:
+            raise ValueError(
+                f"Can't find device's name,Device URI: {device_uri}")
+
+        # 创建临时文件保存切纸指令
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(cut_command)
+            temp_file_path = temp_file.name
+
+        # 使用 CUPS 打印临时文件
+        conn.printFile(printer_name, temp_file_path,
+                       "ESC/POS Cut Command", {"raw": "true"})
+
+        messagebox.showinfo("Success", f"Cutter Command sent: {
+                            printer_name} ({device_uri})")
+        os.remove(temp_file_path)
     except Exception as e:
-        messagebox.showerror("错误", f"发送切纸指令失败：{e}")
+        messagebox.showerror("Error", f"Sent Command Error {e}")
 
 
 def on_cut_paper():
@@ -51,7 +68,7 @@ def on_cut_paper():
     """
     selected_index = printer_listbox.curselection()
     if not selected_index:
-        messagebox.showwarning("警告", "请先选择一个打印机！")
+        messagebox.showwarning("WARN", "Please choose a printer")
         return
 
     # 获取用户选中的打印机信息
