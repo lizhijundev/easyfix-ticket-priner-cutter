@@ -9,8 +9,8 @@ from server.socket_server import SocketServer
 from server.http_server import HttpServer
 from config.settings import Settings
 from utils.logger import setup_logger
-from printer.manager import PrinterManager
 
+# 设置日志记录
 logger = setup_logger()
 
 # 设置全局异常处理
@@ -52,6 +52,7 @@ class PrintService:
             logger.critical(f"Failed to start service: {e}")
             traceback.print_exc()
             raise
+
 
     def _start_servers(self):
         try:
@@ -134,6 +135,28 @@ if __name__ == "__main__":
     try:
         app = QApplication(sys.argv)
         app.setQuitOnLastWindowClosed(False)  # 确保关闭窗口不会退出应用
+
+        # 设置应用程序图标
+        from PyQt6.QtGui import QIcon
+        import os
+
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "app_icon.icns")
+        if os.path.exists(icon_path):
+            app.setWindowIcon(QIcon(icon_path))
+            # logger.info(f"Application icon set from {icon_path}")
+        else:
+            logger.warning(f"Icon file not found at {icon_path}")
+
+        # 在 macOS 上隐藏 Dock 图标
+        if sys.platform == "darwin":
+            try:
+                import objc
+                objc.loadBundle('Foundation', globals(), bundle_path=objc.pathForFramework('/System/Library/Frameworks/Foundation.framework'))
+                NSApp = objc.lookUpClass('NSApplication').sharedApplication()
+                NSApp.setActivationPolicy_(1)  # NSApplicationActivationPolicyAccessory = 1
+                # logger.info("Set application to accessory mode (no Dock icon)")
+            except Exception as e:
+                logger.warning(f"Failed to hide Dock icon: {e}")
 
         service = PrintService()
         service.start()

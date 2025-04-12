@@ -58,13 +58,29 @@ class PrinterManager:
     def _get_mac_printers(self) -> List[str]:
         """macOS系统获取打印机列表"""
         try:
+            import cups
+            conn = cups.Connection()
+            printers = conn.getPrinters()
+            printer_list = list(printers.keys())
+            logger.debug(f"Found macOS printers using pycups: {printer_list}")
+            return printer_list
+        except ImportError:
+            logger.warning("cups module not available, falling back to subprocess method")
+            return self._get_mac_printers_fallback()
+        except Exception as e:
+            logger.error(f"Failed to get macOS printers using pycups: {e}")
+            return self._get_mac_printers_fallback()
+
+    def _get_mac_printers_fallback(self) -> List[str]:
+        """使用subprocess的备用方法获取打印机列表"""
+        try:
             import subprocess
             output = subprocess.check_output(["lpstat", "-a"]).decode("utf-8")
             printers = [line.split()[0] for line in output.splitlines() if line]
-            logger.debug(f"Found macOS printers: {printers}")
+            logger.debug(f"Found macOS printers (fallback): {printers}")
             return printers
         except Exception as e:
-            logger.error(f"Failed to get macOS printers: {e}")
+            logger.error(f"Failed to get macOS printers with fallback method: {e}")
             return []
 
     def _get_linux_printers(self) -> List[str]:
@@ -81,6 +97,7 @@ class PrinterManager:
 
     def discover_printers(self) -> Tuple[bool, bool]:
         """发现可用打印机并更新状态"""
+        logger.info("D！！！！iscovering printers...")
         try:
             printers = self.get_all_printers()
             ticket_printer = self.settings.get("ticket_printer", "")

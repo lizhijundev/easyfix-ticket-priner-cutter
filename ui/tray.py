@@ -5,10 +5,13 @@ import platform
 import traceback
 from PyQt6 import QtWidgets, QtGui
 from utils.logger import setup_logger
+from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
+from PyQt6.QtGui import QIcon, QAction
+
 
 logger = setup_logger()
 
-class SystemTray:
+class SystemTray(QSystemTrayIcon):
     @staticmethod
     def create_application():
         try:
@@ -22,6 +25,7 @@ class SystemTray:
 
     def __init__(self, service):
         try:
+            super().__init__()
             self.service = service
             self.app = QtWidgets.QApplication.instance()
 
@@ -29,30 +33,29 @@ class SystemTray:
             self.tray_icon = QtWidgets.QSystemTrayIcon()
 
             # 尝试加载图标文件，如果失败则使用系统默认图标
-            icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources", "printer_icon.png")
-            logger.info(f"Attempting to load icon: {icon_path}")
+            icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "app_icon.icns")
+            # logger.info(f"Attempting to load icon: {icon_path}")
 
             if os.path.exists(icon_path):
                 icon = QtGui.QIcon(icon_path)
-                logger.info("Custom icon loaded")
             else:
                 # 使用系统默认图标
                 icon = QtWidgets.QApplication.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_ComputerIcon)
-                logger.info("Using default system icon")
 
             self.tray_icon.setIcon(icon)
-            self.tray_icon.setToolTip("Print Service")
+            self.tray_icon.setToolTip("Easyfix Printer Service")
 
             # 创建托盘菜单
             tray_menu = QtWidgets.QMenu()
 
-            settings_action = tray_menu.addAction("Settings")
+            settings_action = tray_menu.addAction("Service Settings")
             settings_action.triggered.connect(self._show_settings)
 
             # 添加手动切纸选项
-            cut_paper_action = tray_menu.addAction("Manual Paper Cut")
+            cut_paper_action = tray_menu.addAction("Receipt Printer Paper Cut")
             cut_paper_action.triggered.connect(self._manual_paper_cut)
 
+            # 添加分隔符
             tray_menu.addSeparator()
 
             exit_action = tray_menu.addAction("Exit")
@@ -61,7 +64,7 @@ class SystemTray:
             self.tray_icon.setContextMenu(tray_menu)
             self.tray_icon.show()
 
-            logger.info("System tray icon initialized")
+            # logger.info("System tray icon initialized")
         except Exception as e:
             logger.critical(f"Failed to initialize system tray: {e}")
             traceback.print_exc()

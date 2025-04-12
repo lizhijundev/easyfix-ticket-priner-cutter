@@ -33,20 +33,20 @@ pyinstaller --noconfirm --onefile --windowed --icon=assets/app_icon.icns main.py
 点击“仍然打开”按钮，允许运行该应用。
 
 ## 生成图标
-
 ```
+cd resources
 mkdir app.iconset
-sips -z 16 16     app_icon.png --out app.iconset/icon_16x16.png
-sips -z 32 32     app_icon.png --out app.iconset/icon_16x16@2x.png
-sips -z 32 32     app_icon.png --out app.iconset/icon_32x32.png
-sips -z 64 64     app_icon.png --out app.iconset/icon_32x32@2x.png
-sips -z 128 128   app_icon.png --out app.iconset/icon_128x128.png
-sips -z 256 256   app_icon.png --out app.iconset/icon_128x128@2x.png
-sips -z 256 256   app_icon.png --out app.iconset/icon_256x256.png
-sips -z 512 512   app_icon.png --out app.iconset/icon_256x256@2x.png
-sips -z 512 512   app_icon.png --out app.iconset/icon_512x512.png
-cp app_icon.png app.iconset/icon_512x512@2x.png
+sips -z 16 16     printer_icon.png --out app.iconset/icon_16x16.png
+sips -z 32 32     printer_icon.png --out app.iconset/icon_16x16@2x.png
+sips -z 32 32     printer_icon.png --out app.iconset/icon_32x32.png
+sips -z 64 64     printer_icon.png --out app.iconset/icon_32x32@2x.png
+sips -z 128 128   printer_icon.png --out app.iconset/icon_128x128.png
+sips -z 256 256   printer_icon.png --out app.iconset/icon_128x128@2x.png
+sips -z 256 256   printer_icon.png --out app.iconset/icon_256x256.png
+sips -z 512 512   printer_icon.png --out app.iconset/icon_256x256@2x.png
+sips -z 512 512   printer_icon.png --out app.iconset/icon_512x512.png
+cp printer_icon.png app.iconset/icon_512x512@2x.png
 iconutil -c icns app.iconset
-mv app.icns assets/app_icon.icns
+mv app.icns ../assets/app_icon.icns
 rm -r app.iconset
 ```
