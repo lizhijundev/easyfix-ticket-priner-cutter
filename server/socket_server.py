@@ -86,18 +86,33 @@ class SocketServer:
             # 接收数据
             data = client.recv(4096).decode('utf-8')
             if not data:
-                logger.warning(f"从 {addr} 接收到空数据")
+                logger.warning(f"Received empty data from {addr}")
                 return
 
-            logger.info(f"从 {addr} 接收: {data}")
+            logger.info(f"Received from {addr}: {data}")
 
-            # 处理打印请求
+            # 检查打印机状态
             response = "OK"
+
+            # 解析数据，确定是标签还是小票打印请求
+            try:
+                request_data = json.loads(data)
+                if 'type' in request_data:
+                    if request_data['type'] == 'label':
+                        if not self.printer_manager.is_label_printer_available():
+                            response = "ERROR: Label printer not available"
+                    elif request_data['type'] == 'receipt':
+                        if not self.printer_manager.is_receipt_printer_available():
+                            response = "ERROR: Receipt printer not available"
+            except json.JSONDecodeError:
+                # 不是JSON格式，使用默认响应
+                pass
+
             client.send(response.encode('utf-8'))
 
-            logger.info(f"向 {addr} 发送响应: {response}")
+            logger.info(f"Sent response to {addr}: {response}")
         except Exception as e:
-            logger.error(f"处理客户端 {addr} 时出错: {e}")
+            logger.error(f"Error handling client {addr}: {e}")
             traceback.print_exc()
         finally:
             client.close()

@@ -9,6 +9,7 @@ from server.socket_server import SocketServer
 from server.http_server import HttpServer
 from config.settings import Settings
 from utils.logger import setup_logger
+from printer.manager import PrinterManager
 
 logger = setup_logger()
 
@@ -25,7 +26,7 @@ class PrintService:
     def __init__(self):
         try:
             self.settings = Settings()
-            self.printer_manager = PrinterManager()
+            self.printer_manager = PrinterManager(self.settings)  # 传递settings给PrinterManager
             self.socket_server = None
             self.http_server = None
             self.tray = None
@@ -108,17 +109,22 @@ class PrintService:
 
     def show_settings(self):
         try:
+            # 如果设置窗口已经打开，则激活它而不是创建新的
+            if hasattr(self, 'settings_dialog') and self.settings_dialog.isVisible():
+                self.settings_dialog.activateWindow()
+                return
+
             # 显示设置窗口
             from ui.settings_dialog import SettingsDialog
-            dialog = SettingsDialog(
+            self.settings_dialog = SettingsDialog(
                 self.settings,
                 self.printer_manager,
                 socket_server=self.socket_server,
                 http_server=self.http_server
             )
             # 连接信号
-            dialog.settingsChanged.connect(self.restart_servers)
-            result = dialog.exec()
+            self.settings_dialog.settingsChanged.connect(self.restart_servers)
+            result = self.settings_dialog.exec()
             logger.info(f"Settings dialog returned result: {result}")
         except Exception as e:
             logger.critical(f"Failed to show settings dialog: {e}")

@@ -49,6 +49,10 @@ class SystemTray:
             settings_action = tray_menu.addAction("Settings")
             settings_action.triggered.connect(self._show_settings)
 
+            # 添加手动切纸选项
+            cut_paper_action = tray_menu.addAction("Manual Paper Cut")
+            cut_paper_action.triggered.connect(self._manual_paper_cut)
+
             tray_menu.addSeparator()
 
             exit_action = tray_menu.addAction("Exit")
@@ -62,6 +66,24 @@ class SystemTray:
             logger.critical(f"Failed to initialize system tray: {e}")
             traceback.print_exc()
             raise
+
+    def _manual_paper_cut(self):
+        """手动切纸功能"""
+        try:
+            logger.info("Manual paper cut requested from tray menu")
+            success, message = self.service.printer_manager.manual_cut_receipt()
+            if success:
+                self.show_notification("Paper Cut", message)
+            else:
+                QtWidgets.QMessageBox.warning(None, "Warning", message)
+        except Exception as e:
+            logger.error(f"Error during manual paper cut: {e}")
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(
+                None,
+                "Error",
+                f"Failed to cut paper: {str(e)}"
+            )
 
     def _show_settings(self):
         """显示设置对话框的包装方法，添加异常处理"""

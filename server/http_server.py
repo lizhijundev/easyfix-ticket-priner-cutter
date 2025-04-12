@@ -111,9 +111,17 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
     def _handle_print_label(self, data):
         """处理标签打印请求"""
         try:
+            # 首先检查标签打印机是否可用
+            if not self.printer_manager.is_label_printer_available():
+                self._send_json_response({
+                    'success': False,
+                    'message': "Label printer not available"
+                })
+                return
+
             # 检查必要的字段
             if 'content' not in data:
-                self.send_error(400, "缺少content字段")
+                self.send_error(400, "Missing content field")
                 return
 
             # 获取打印机名称
@@ -127,19 +135,27 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
             # 返回结果
             self._send_json_response({
                 'success': success,
-                'message': "标签打印成功" if success else "标签打印失败"
+                'message': "Label printed successfully" if success else "Failed to print label"
             })
         except Exception as e:
-            logger.error(f"处理标签打印请求出错: {e}")
+            logger.error(f"Error handling label print request: {e}")
             traceback.print_exc()
-            self.send_error(500, "处理标签打印请求时出错")
+            self.send_error(500, "Error processing label print request")
 
     def _handle_print_ticket(self, data):
         """处理小票打印请求"""
         try:
+            # 首先检查小票打印机是否可用
+            if not self.printer_manager.is_receipt_printer_available():
+                self._send_json_response({
+                    'success': False,
+                    'message': "Receipt printer not available"
+                })
+                return
+
             # 检查必要的字段
             if 'content' not in data:
-                self.send_error(400, "缺少content字段")
+                self.send_error(400, "Missing content field")
                 return
 
             # 获取打印机名称
@@ -153,12 +169,12 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
             # 返回结果
             self._send_json_response({
                 'success': success,
-                'message': "小票打印成功" if success else "小票打印失败"
+                'message': "Receipt printed successfully" if success else "Failed to print receipt"
             })
         except Exception as e:
-            logger.error(f"处理小票打印请求出错: {e}")
+            logger.error(f"Error handling receipt print request: {e}")
             traceback.print_exc()
-            self.send_error(500, "处理小票打印请求时出错")
+            self.send_error(500, "Error processing receipt print request")
 
     def _send_json_response(self, data):
         """发送JSON响应"""
