@@ -47,8 +47,8 @@ class Settings:
                 default_settings = {
                     "label_printer": "",
                     "label_size": "40x30mm",
-                    "ticket_printer": "",
-                    "ticket_width": "80mm",
+                    "receipt_printer": "",
+                    "receipt_width": "80mm",
                     "socket_port": 8420,
                     "http_port": 8520
                 }
@@ -68,8 +68,8 @@ class Settings:
             return {
                 "label_printer": "",
                 "label_size": "40x30mm",
-                "ticket_printer": "",
-                "ticket_width": "80mm",
+                "receipt_printer": "",
+                "receipt_width": "80mm",
                 "socket_port": 8420,
                 "http_port": 8520
             }
@@ -107,3 +107,4 @@ class Settings:
             logger.critical(f"Failed to save settings: {e}")
             traceback.print_exc()
             return False
+

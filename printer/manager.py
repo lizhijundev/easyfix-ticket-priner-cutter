@@ -7,7 +7,9 @@ import traceback
 from typing import List, Tuple, Optional
 from config.settings import Settings
 
-logger = logging.getLogger(__name__)
+from utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 class PrinterManager:
     def __init__(self, settings: Settings):
@@ -20,9 +22,8 @@ class PrinterManager:
     def _init_printers(self):
         """初始化打印机状态"""
         try:
-            printers = self.get_all_printers()
-            self.receipt_printer_available = bool(self.settings.get("ticket_printer") in printers)
-            self.label_printer_available = bool(self.settings.get("label_printer") in printers)
+            self.receipt_printer_available = self.check_printer_availability("receipt")
+            self.label_printer_available = self.check_printer_availability("label")
             logger.info(f"Printers initialized - Receipt: {self.receipt_printer_available}, Label: {self.label_printer_available}")
         except Exception as e:
             logger.error(f"Failed to initialize printers: {e}")
@@ -41,6 +42,20 @@ class PrinterManager:
             logger.error(f"Failed to get printers: {e}")
             traceback.print_exc()
             return []
+    
+    def get_receipt_printers(self) -> List[str]:
+        """获取小票打印机列表"""
+        all_printers = self.get_all_printers()
+        receipt_printers = [p for p in all_printers if "ReceiptPrinter" in p]
+        logger.debug(f"Found receipt printers: {receipt_printers}")
+        return receipt_printers
+    
+    def get_label_printers(self) -> List[str]:
+        """获取标签打印机列表"""
+        all_printers = self.get_all_printers()
+        label_printers = [p for p in all_printers if "LabelPrinter" in p]
+        logger.debug(f"XX Found label printers: {label_printers}")
+        return label_printers
 
     def _get_windows_printers(self) -> List[str]:
         """Windows系统获取打印机列表"""
@@ -95,16 +110,148 @@ class PrinterManager:
             logger.error(f"Failed to get Linux printers: {e}")
             return []
 
+    def check_printer_availability(self, printer_type: str) -> bool:
+        """检查特定类型打印机的USB连接状态"""
+        try:
+            printer_name = self.settings.get(f"{printer_type}_printer", "")
+            if not printer_name:
+                return False
+                
+            # 根据打印机类型获取对应的打印机列表
+            if printer_type == "receipt":
+                printers = self.get_receipt_printers()
+            else:
+                printers = self.get_label_printers()
+
+            logger.info(f"1.Found {printer_type} printers: {printers}, printer_name: {printer_name}")
+
+                
+            # 首先检查打印机是否在列表中
+            if printer_name not in printers:
+                return False
+                
+            # 检查USB连接状态
+            if self.system == "Windows":
+                return self._check_windows_usb_printer(printer_name)
+            elif self.system == "Darwin":  # macOS
+                return self._check_mac_usb_printer(printer_name)
+            else:  # Linux
+                return self._check_linux_usb_printer(printer_name)
+        except Exception as e:
+            logger.error(f"Failed to check {printer_type} printer availability: {e}")
+            return False
+
+    def _check_windows_usb_printer(self, printer_name: str) -> bool:
+        """Windows系统检查USB打印机状态"""
+        try:
+            import win32print
+            printer_info = {}
+            
+            hPrinter = win32print.OpenPrinter(printer_name)
+            try:
+                printer_info = win32print.GetPrinter(hPrinter, 2)
+            finally:
+                win32print.ClosePrinter(hPrinter)
+                
+            # 检查打印机状态
+            status = printer_info.get("Status", 0)
+            if status == 0:  # 没有错误状态表示打印机可用
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error checking Windows USB printer: {e}")
+            return False
+
+    def _check_mac_usb_printer(self, printer_name: str) -> bool:
+        """macOS系统检查USB打印机状态"""
+        try:
+            # 首先尝试使用cups库
+            import cups
+            try:
+                conn = cups.Connection()
+                printers = conn.getPrinters()
+                
+                # 检查打印机是否在连接的打印机列表中
+                if printer_name not in printers:
+                    logger.warning(f"Printer '{printer_name}' not found in the system")
+                    return False
+                    
+                # 获取打印机状态
+                printer_attrs = printers[printer_name]
+                # cups状态码：3表示空闲(idle)，4表示正在处理(processing)，5表示停止(stopped)
+                printer_state = printer_attrs.get("printer-state", 0)
+                # 检查是否有错误状态
+                printer_state_reasons = printer_attrs.get("printer-state-reasons", [])
+                
+                logger.debug(f"Printer '{printer_name}' state: {printer_state}, reasons: {printer_state_reasons}")
+                
+                # 如果打印机状态包含offline-report，表示打印机离线
+                if "offline-report" in " ".join(printer_state_reasons):
+                    logger.warning(f"Printer '{printer_name}' is offline")
+                    return False
+
+                # 如果状态为3(idle)或4(processing)且没有严重错误，则认为打印机可用
+                if printer_state in [3, 4] and not any(reason.endswith("-error") for reason in printer_state_reasons):
+                    return True
+                return False
+
+            except Exception as cups_error:
+                logger.warning(f"Failed to check printer with cups: {cups_error}, falling back to subprocess")
+                return self._check_mac_usb_printer_fallback(printer_name)
+
+        except ImportError:
+            logger.warning("cups module not available, falling back to subprocess")
+            return self._check_mac_usb_printer_fallback(printer_name)
+
+    def _check_mac_usb_printer_fallback(self, printer_name: str) -> bool:
+        """使用subprocess备用方法检查macOS打印机状态"""
+        try:
+            import subprocess
+            # 获取打印机状态
+            result = subprocess.run(
+                ["lpstat", "-p", printer_name],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+
+            if result.returncode != 0:
+                return False
+
+            # 如果输出中包含"idle"或"ready"表示打印机可用
+            output = result.stdout.lower()
+            return "idle" in output or "ready" in output
+        except Exception as e:
+            logger.error(f"Error checking macOS USB printer: {e}")
+            return False
+
+    def _check_linux_usb_printer(self, printer_name: str) -> bool:
+        """Linux系统检查USB打印机状态"""
+        try:
+            import subprocess
+            # 获取打印机状态
+            result = subprocess.run(
+                ["lpstat", "-p", printer_name],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+
+            if result.returncode != 0:
+                return False
+
+            # 如果输出中包含"idle"表示打印机可用
+            return "idle" in result.stdout.lower()
+        except Exception as e:
+            logger.error(f"Error checking Linux USB printer: {e}")
+            return False
+
     def discover_printers(self) -> Tuple[bool, bool]:
         """发现可用打印机并更新状态"""
-        logger.info("D！！！！iscovering printers...")
+        logger.info("Discovering printers...")
         try:
-            printers = self.get_all_printers()
-            ticket_printer = self.settings.get("ticket_printer", "")
-            label_printer = self.settings.get("label_printer", "")
-
-            self.receipt_printer_available = ticket_printer in printers
-            self.label_printer_available = label_printer in printers
+            self.receipt_printer_available = self.check_printer_availability("receipt")
+            self.label_printer_available = self.check_printer_availability("label")
 
             logger.info(f"Discovered printers - Receipt: {self.receipt_printer_available}, Label: {self.label_printer_available}")
             return self.receipt_printer_available, self.label_printer_available
@@ -128,7 +275,7 @@ class PrinterManager:
                 logger.warning("Receipt printer not available, cannot cut paper")
                 return False, "Receipt printer not available"
 
-            printer_name = self.settings.get("ticket_printer", "")
+            printer_name = self.settings.get("receipt_printer", "")
             if not printer_name:
                 logger.warning("No receipt printer selected")
                 return False, "No receipt printer selected"
@@ -217,3 +364,5 @@ class PrinterManager:
         except Exception as e:
             logger.error(f"Failed to print test page: {e}")
             return False, f"Error: {str(e)}"
+
+

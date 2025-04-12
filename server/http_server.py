@@ -29,7 +29,7 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
                 <!DOCTYPE html>
                 <html>
                 <head>
-                    <title>Print Service Status</title>
+                    <title>Easyfix Print Service Status</title>
                     <style>
                         body {{ font-family: Arial, sans-serif; margin: 20px; }}
                         h1 {{ color: #333; }}
@@ -40,7 +40,7 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
                     </style>
                 </head>
                 <body>
-                    <h1>Print Service Status</h1>
+                    <h1>Easyfix Print Service Status</h1>
                     <div class="status running">
                         <strong>Status:</strong> Running
                     </div>
@@ -99,8 +99,8 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
             # 处理打印请求
             if self.path == '/api/print/label':
                 self._handle_print_label(data)
-            elif self.path == '/api/print/ticket':
-                self._handle_print_ticket(data)
+            elif self.path == '/api/print/receipt':
+                self._handle_print_receipt(data)
             else:
                 self.send_error(404, "API端点不存在")
         except Exception as e:
@@ -142,7 +142,7 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self.send_error(500, "Error processing label print request")
 
-    def _handle_print_ticket(self, data):
+    def _handle_print_receipt(self, data):
         """处理小票打印请求"""
         try:
             # 首先检查小票打印机是否可用
@@ -161,10 +161,10 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
             # 获取打印机名称
             printer_name = data.get('printer', None)
             if not printer_name:
-                printer_name = self.printer_manager.settings.get("ticket_printer", "")
+                printer_name = self.printer_manager.settings.get("receipt_printer", "")
 
             # 打印小票
-            success = self.printer_manager.print_ticket(printer_name, data['content'])
+            success = self.printer_manager.print_receipt(printer_name, data['content'])
 
             # 返回结果
             self._send_json_response({
@@ -193,7 +193,11 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
 class HTTPServerThread(HTTPServer):
     def __init__(self, server_address, RequestHandlerClass, printer_manager):
         self.printer_manager = printer_manager
-        super().__init__(server_address, RequestHandlerClass)
+        # 创建一个闭包类来添加printer_manager
+        handler_with_printer = type('HandlerWithPrinter',
+                                    (RequestHandlerClass,),
+                                    {'printer_manager': printer_manager})
+        super().__init__(server_address, handler_with_printer)
 
     def finish_request(self, request, client_address):
         """重写以传递printer_manager到处理器"""
@@ -277,3 +281,4 @@ class HttpServer:
         except Exception as e:
             logger.error(f"停止HTTP服务器时出错: {e}")
             traceback.print_exc()
+

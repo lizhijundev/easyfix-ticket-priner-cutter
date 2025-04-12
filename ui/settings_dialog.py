@@ -1,7 +1,7 @@
 from PyQt6 import QtWidgets, QtCore
 import traceback
 from utils.logger import setup_logger
-from ui.settings import TicketTab, LabelTab, ServiceTab
+from ui.settings import ReceiptTab, LabelTab, ServiceTab
 
 logger = setup_logger()
 
@@ -21,7 +21,7 @@ class SettingsDialog(QtWidgets.QDialog):
             self.http_server = http_server
             
             # 初始化选项卡
-            self.ticket_tab = None
+            self.receipt_tab = None
             self.label_tab = None
             self.service_tab = None
 
@@ -41,14 +41,14 @@ class SettingsDialog(QtWidgets.QDialog):
             tabs = QtWidgets.QTabWidget()
             
             # 创建各个选项卡
-            self.ticket_tab = TicketTab(self.settings, self.printer_manager)
+            self.receipt_tab = ReceiptTab(self.settings, self.printer_manager)
             self.label_tab = LabelTab(self.settings, self.printer_manager)
             self.service_tab = ServiceTab(self.settings, self.socket_server, self.http_server)
             
             # 连接服务控制信号
             self.service_tab.serviceControlRequested.connect(self.handle_service_control)
             
-            tabs.addTab(self.ticket_tab, "Receipt Printer")
+            tabs.addTab(self.receipt_tab, "Receipt Printer")
             tabs.addTab(self.label_tab, "Label Printer")
             tabs.addTab(self.service_tab, "Services")
 
@@ -143,7 +143,7 @@ class SettingsDialog(QtWidgets.QDialog):
             logger.info("Saving settings...")
             
             # 保存小票打印机选项卡设置
-            self.ticket_tab.save_settings()
+            self.receipt_tab.save_settings()
             
             # 保存标签打印机选项卡设置
             self.label_tab.save_settings()

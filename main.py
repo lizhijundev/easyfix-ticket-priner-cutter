@@ -3,6 +3,7 @@ import sys
 import signal
 import traceback
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QTimer  # 添加 QTimer 用于定时任务
 from ui.tray import SystemTray
 from printer.manager import PrinterManager
 from server.socket_server import SocketServer
@@ -30,6 +31,7 @@ class PrintService:
             self.socket_server = None
             self.http_server = None
             self.tray = None
+            self.printer_discovery_timer = None  # 定时器用于定期发现打印机
             logger.info("PrintService initialized")
         except Exception as e:
             logger.critical(f"Failed to initialize PrintService: {e}")
@@ -39,7 +41,10 @@ class PrintService:
     def start(self):
         try:
             # 初始化打印机管理
-            self.printer_manager.discover_printers()
+            logger.info("Starting PrintService")
+            test = self.printer_manager.discover_printers()
+            logger.info(test)
+
 
             # 启动服务器
             self._start_servers()
@@ -47,12 +52,20 @@ class PrintService:
             # 启动系统托盘
             self.tray = SystemTray(self)
 
+            self._start_printer_discovery_timer()  # 启动定时器
+
             logger.info("Print service started")
         except Exception as e:
             logger.critical(f"Failed to start service: {e}")
             traceback.print_exc()
             raise
 
+    def _start_printer_discovery_timer(self):
+        """启动定时器以定期发现打印机"""
+        self.printer_discovery_timer = QTimer()
+        self.printer_discovery_timer.timeout.connect(self.printer_manager.discover_printers)
+        self.printer_discovery_timer.start(5000)  # 每5秒调用一次 discover_printers
+        logger.info("Printer discovery timer started")
 
     def _start_servers(self):
         try:
@@ -93,6 +106,11 @@ class PrintService:
 
     def stop(self):
         try:
+            # 停止定时器
+            if self.printer_discovery_timer:
+                self.printer_discovery_timer.stop()
+                logger.info("Printer discovery timer stopped")
+
             if self.socket_server:
                 self.socket_server.stop()
 

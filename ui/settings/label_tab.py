@@ -17,8 +17,8 @@ class LabelTab(QtWidgets.QWidget):
         # 标签打印机选择
         label_printer_form = QtWidgets.QFormLayout()
         
-        # 获取打印机列表
-        printers = self.printer_manager.get_all_printers()
+        # 获取标签打印机列表
+        printers = self.printer_manager.get_label_printers()
         
         self.label_printer_combo = self.create_printer_combo(
             printers, "label_printer")
@@ -98,6 +98,7 @@ class LabelTab(QtWidgets.QWidget):
     
     def update_label_printer_status(self):
         """更新标签打印机状态显示"""
+        self.printer_manager.discover_printers()  # 重新检查打印机状态
         is_available = self.printer_manager.is_label_printer_available()
         status_text = "Available" if is_available else "Not Available"
         status_style = "color: green; font-weight: bold;" if is_available else "color: red; font-weight: bold;"
@@ -122,3 +123,4 @@ class LabelTab(QtWidgets.QWidget):
             custom_width = self.label_width_edit.text()
             custom_height = self.label_height_edit.text()
             self.settings.set("label_custom_size", f"{custom_width}x{custom_height}")
+

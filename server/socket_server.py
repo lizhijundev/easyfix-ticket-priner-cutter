@@ -3,6 +3,7 @@ import threading
 import socket
 import traceback
 import time
+import json
 from utils.logger import setup_logger
 
 logger = setup_logger()
@@ -14,6 +15,7 @@ class SocketServer:
             self.printer_manager = printer_manager
             self.running = False
             self.server_thread = None
+            self.client_timeout = 60  # 客户端连接超时时间，单位秒
             logger.info(f"Socket服务器初始化，端口: {port}")
         except Exception as e:
             logger.critical(f"初始化Socket服务器失败: {e}")
@@ -81,41 +83,211 @@ class SocketServer:
     def _handle_client(self, client, addr):
         """处理客户端连接"""
         try:
-            client.settimeout(30)  # 设置30秒超时
+            client.settimeout(self.client_timeout)  # 使用更长的超时时间
+            logger.info(f"客户端 {addr} 连接超时设置为 {self.client_timeout} 秒")
 
-            # 接收数据
-            data = client.recv(4096).decode('utf-8')
+            # 使用缓冲区接收数据
+            buffer = []
+            while True:
+                try:
+                    chunk = client.recv(4096)
+                    if not chunk:  # 连接已关闭
+                        break
+                    buffer.append(chunk)
+                    
+                    # 尝试解析已收到的数据，看是否是完整的请求
+                    try:
+                        data = b''.join(buffer).decode('utf-8')
+                        # 检查是否是有效的JSON (简单验证)
+                        json.loads(data)
+                        # 如果能成功解析为JSON，说明数据已完整接收
+                        break
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        # 数据还不完整，继续接收
+                        continue
+                except socket.timeout:
+                    logger.warning(f"客户端 {addr} 接收数据超时")
+                    client.send("ERROR: Connection timeout".encode('utf-8'))
+                    return
+
+            data = b''.join(buffer).decode('utf-8')
             if not data:
-                logger.warning(f"Received empty data from {addr}")
+                logger.warning(f"收到来自 {addr} 的空数据")
+                client.send("ERROR: Empty data received".encode('utf-8'))
                 return
 
-            logger.info(f"Received from {addr}: {data}")
+            logger.info(f"收到来自 {addr} 的数据: {data}")
 
-            # 检查打印机状态
+            # 默认响应
             response = "OK"
 
-            # 解析数据，确定是标签还是小票打印请求
+            # 解析数据，处理打印请求
             try:
                 request_data = json.loads(data)
-                if 'type' in request_data:
-                    if request_data['type'] == 'label':
-                        if not self.printer_manager.is_label_printer_available():
-                            response = "ERROR: Label printer not available"
-                    elif request_data['type'] == 'receipt':
-                        if not self.printer_manager.is_receipt_printer_available():
-                            response = "ERROR: Receipt printer not available"
-            except json.JSONDecodeError:
-                # 不是JSON格式，使用默认响应
+                
+                # 根据event_type处理不同的请求
+                event_type = request_data.get('event_type')
+                
+                if event_type == 'get_receipt_printer':
+                    # 获取小票打印机状态
+                    is_available = self.printer_manager.is_receipt_printer_available()
+                    response = json.dumps({
+                        'status': 'ok' if is_available else 'error',
+                        'available': is_available,
+                        'message': '小票打印机可用' if is_available else '小票打印机不可用'
+                    })
+                    
+                elif event_type == 'get_ticket_printer':
+                    # 获取标签打印机状态
+                    is_available = self.printer_manager.is_label_printer_available()
+                    response = json.dumps({
+                        'status': 'ok' if is_available else 'error',
+                        'available': is_available,
+                        'message': '标签打印机可用' if is_available else '标签打印机不可用'
+                    })
+                    
+                elif event_type == 'print_receipt':
+                    # 打印小票
+                    if not self.printer_manager.is_receipt_printer_available():
+                        response = json.dumps({
+                            'status': 'error',
+                            'message': '小票打印机不可用'
+                        })
+                    else:
+                        try:
+                            # 获取原始打印数据
+                            raw_data = request_data.get('raw')
+                            if not raw_data:
+                                raise ValueError("缺少打印数据")
+                                
+                            # 构建打印数据对象
+                            print_data = {
+                                'raw': raw_data,
+                                'type': 'receipt'
+                            }
+                            
+                            result = self.printer_manager.print_receipt(print_data)
+                            if result:
+                                response = json.dumps({
+                                    'status': 'ok',
+                                    'message': '小票打印成功'
+                                })
+                            else:
+                                response = json.dumps({
+                                    'status': 'error',
+                                    'message': '小票打印失败'
+                                })
+                            logger.info(f"小票打印结果: {response}")
+                        except Exception as e:
+                            error_msg = f"小票打印过程出错: {str(e)}"
+                            logger.error(error_msg)
+                            response = json.dumps({
+                                'status': 'error',
+                                'message': error_msg
+                            })
+                
+                elif event_type == 'print_label':
+                    # 打印标签
+                    if not self.printer_manager.is_label_printer_available():
+                        response = json.dumps({
+                            'status': 'error',
+                            'message': '标签打印机不可用'
+                        })
+                    else:
+                        try:
+                            # 获取原始打印数据
+                            raw_data = request_data.get('raw')
+                            if not raw_data:
+                                raise ValueError("缺少打印数据")
+                                
+                            # 构建打印数据对象
+                            print_data = {
+                                'raw': raw_data,
+                                'type': 'label'
+                            }
+                            
+                            result = self.printer_manager.print_label(print_data)
+                            if result:
+                                response = json.dumps({
+                                    'status': 'ok',
+                                    'message': '标签打印成功'
+                                })
+                            else:
+                                response = json.dumps({
+                                    'status': 'error',
+                                    'message': '标签打印失败'
+                                })
+                            logger.info(f"标签打印结果: {response}")
+                        except Exception as e:
+                            error_msg = f"标签打印过程出错: {str(e)}"
+                            logger.error(error_msg)
+                            response = json.dumps({
+                                'status': 'error',
+                                'message': error_msg
+                            })
+                
+                elif event_type == 'heartbeat':
+                    # 心跳检测
+                    response = json.dumps({
+                        'status': 'ok',
+                        'message': 'HEARTBEAT_OK'
+                    })
+                    
+                else:
+                    # 未知事件类型
+                    error_msg = f"未知的事件类型: {event_type}"
+                    logger.warning(error_msg)
+                    response = json.dumps({
+                        'status': 'error',
+                        'message': error_msg
+                    })
+                    
+            except json.JSONDecodeError as e:
+                error_msg = f"JSON解析错误: {str(e)}"
+                logger.error(f"来自 {addr} 的数据格式无效: {error_msg}")
+                response = json.dumps({
+                    'status': 'error',
+                    'message': f"JSON格式无效: {error_msg}"
+                })
+            except Exception as e:
+                error_msg = f"处理请求时出错: {str(e)}"
+                logger.error(error_msg)
+                response = json.dumps({
+                    'status': 'error',
+                    'message': error_msg
+                })
+
+            try:
+                client.send(response.encode('utf-8'))
+                logger.info(f"已发送响应到 {addr}: {response}")
+            except socket.timeout:
+                logger.error(f"向客户端 {addr} 发送响应超时")
+            except Exception as e:
+                logger.error(f"发送响应到 {addr} 时出错: {str(e)}")
+        except socket.timeout:
+            logger.error(f"客户端 {addr} 连接超时")
+            try:
+                error_response = json.dumps({
+                    'status': 'error',
+                    'message': '连接超时'
+                })
+                client.send(error_response.encode('utf-8'))
+            except:
                 pass
-
-            client.send(response.encode('utf-8'))
-
-            logger.info(f"Sent response to {addr}: {response}")
         except Exception as e:
-            logger.error(f"Error handling client {addr}: {e}")
+            logger.error(f"处理客户端 {addr} 时出错: {e}")
             traceback.print_exc()
+            try:
+                error_response = json.dumps({
+                    'status': 'error',
+                    'message': f"服务器错误: {str(e)[:100]}"
+                })
+                client.send(error_response.encode('utf-8'))
+            except:
+                pass
         finally:
             client.close()
+            logger.info(f"关闭与 {addr} 的连接")
 
     def stop(self):
         """停止Socket服务器"""
