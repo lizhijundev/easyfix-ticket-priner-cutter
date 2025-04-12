@@ -78,7 +78,7 @@ def on_cut_paper():
 
 # 创建主窗口
 root = tk.Tk()
-root.title("Easyfix Ticket Print Cutter")
+root.title("Easyfix Printer Service")
 
 # 获取 USB 打印机列表
 usb_printers = list_printers()

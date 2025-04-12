@@ -1,2 +1,5 @@
-pycups
-pyserial
+PyQt6>=6.0.0
+Flask>=2.0.0
+pycups>=2.0.1; sys_platform == "darwin"
+pywin32>=300; sys_platform == "win32"
+reportlab>=3.6.0

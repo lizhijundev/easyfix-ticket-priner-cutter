@@ -1,0 +1,110 @@
+# ui/tray.py
+import sys
+import os
+import platform
+import traceback
+from PyQt6 import QtWidgets, QtGui
+from utils.logger import setup_logger
+
+logger = setup_logger()
+
+class SystemTray:
+    @staticmethod
+    def create_application():
+        try:
+            app = QtWidgets.QApplication(sys.argv)
+            app.setQuitOnLastWindowClosed(False)  # 确保关闭窗口不会退出应用
+            return app
+        except Exception as e:
+            logger.critical(f"Failed to create application instance: {e}")
+            traceback.print_exc()
+            raise
+
+    def __init__(self, service):
+        try:
+            self.service = service
+            self.app = QtWidgets.QApplication.instance()
+
+            # 创建系统托盘图标
+            self.tray_icon = QtWidgets.QSystemTrayIcon()
+
+            # 尝试加载图标文件，如果失败则使用系统默认图标
+            icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources", "printer_icon.png")
+            logger.info(f"Attempting to load icon: {icon_path}")
+
+            if os.path.exists(icon_path):
+                icon = QtGui.QIcon(icon_path)
+                logger.info("Custom icon loaded")
+            else:
+                # 使用系统默认图标
+                icon = QtWidgets.QApplication.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_ComputerIcon)
+                logger.info("Using default system icon")
+
+            self.tray_icon.setIcon(icon)
+            self.tray_icon.setToolTip("Print Service")
+
+            # 创建托盘菜单
+            tray_menu = QtWidgets.QMenu()
+
+            settings_action = tray_menu.addAction("Settings")
+            settings_action.triggered.connect(self._show_settings)
+
+            tray_menu.addSeparator()
+
+            exit_action = tray_menu.addAction("Exit")
+            exit_action.triggered.connect(self.exit_app)
+
+            self.tray_icon.setContextMenu(tray_menu)
+            self.tray_icon.show()
+
+            logger.info("System tray icon initialized")
+        except Exception as e:
+            logger.critical(f"Failed to initialize system tray: {e}")
+            traceback.print_exc()
+            raise
+
+    def _show_settings(self):
+        """显示设置对话框的包装方法，添加异常处理"""
+        try:
+            logger.info("Showing settings dialog")
+            self.service.show_settings()
+        except Exception as e:
+            logger.critical(f"Failed to show settings dialog: {e}")
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(
+                None,
+                "Error",
+                f"Error showing settings dialog: {str(e)}"
+            )
+
+    def show_notification(self, title, message):
+        """显示系统通知"""
+        try:
+            logger.info(f"Showing notification: {title} - {message}")
+            self.tray_icon.showMessage(title, message, QtWidgets.QSystemTrayIcon.MessageIcon.Information, 3000)
+        except Exception as e:
+            logger.error(f"Failed to show notification: {e}")
+            traceback.print_exc()
+
+    def exit_app(self):
+        """退出应用程序"""
+        try:
+            logger.info("User requested to exit application")
+            reply = QtWidgets.QMessageBox.question(
+                None,
+                'Confirm Exit',
+                'Are you sure you want to exit Print Service?',
+                QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+                QtWidgets.QMessageBox.StandardButton.No
+            )
+
+            if reply == QtWidgets.QMessageBox.StandardButton.Yes:
+                logger.info("User confirmed exit, stopping service")
+                self.service.stop()
+                self.app.quit()
+                logger.info("Application exited")
+        except Exception as e:
+            logger.critical(f"Failed to exit application: {e}")
+            traceback.print_exc()
+            # 强制退出
+            sys.exit(1)

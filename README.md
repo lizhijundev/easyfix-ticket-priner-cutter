@@ -1,12 +1,16 @@
-USB 热敏打印切纸程序
+# 打印机后台服务
+支持打印机的后台服务，支持打印机的基本操作。
+
+## 安装环境
+```angular2html
+pip install -r requirements.txt
+```
 
 ## 打包
 
 ```
 pip install pyinstaller
-
-pyinstaller --noconfirm --onefile --windowed --icon=assets/app_icon.icns app.py
-
+pyinstaller --noconfirm --onefile --windowed --icon=assets/app_icon.icns main.py
 ```
 
 参数说明：
