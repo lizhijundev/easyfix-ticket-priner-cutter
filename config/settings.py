@@ -46,7 +46,7 @@ class Settings:
                 # 默认设置
                 default_settings = {
                     "label_printer": "",
-                    "label_size": "40x30mm",
+                    "label_size": "50x40mm",
                     "receipt_printer": "",
                     "receipt_width": "80mm",
                     "socket_port": 8420,
@@ -67,7 +67,7 @@ class Settings:
             # 返回默认设置
             return {
                 "label_printer": "",
-                "label_size": "40x30mm",
+                "label_size": "50x40mm",
                 "receipt_printer": "",
                 "receipt_width": "80mm",
                 "socket_port": 8420,

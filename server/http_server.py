@@ -1,6 +1,10 @@
 # server/http_server.py
 import threading
 import traceback
+import uuid
+import os
+import io
+import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 from utils.logger import setup_logger
@@ -83,26 +87,41 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         """处理POST请求"""
         try:
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length).decode('utf-8')
-
             logger.info(f"接收到POST请求: {self.path}")
-            logger.debug(f"POST数据: {post_data}")
 
-            # 解析JSON数据
-            try:
-                data = json.loads(post_data)
-            except json.JSONDecodeError:
-                self.send_error(400, "无效的JSON格式")
-                return
+            # 判断请求类型
+            content_type = self.headers.get('Content-Type', '')
 
-            # 处理打印请求
-            if self.path == '/api/print/label':
-                self._handle_print_label(data)
-            elif self.path == '/api/print/receipt':
-                self._handle_print_receipt(data)
+            # 处理不同类型的请求
+            if content_type.startswith('application/json'):
+                # 处理JSON格式的请求
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length).decode('utf-8')
+                logger.debug(f"JSON POST数据: {post_data}")
+
+                try:
+                    data = json.loads(post_data)
+                except json.JSONDecodeError:
+                    self.send_error(400, "无效的JSON格式")
+                    return
+
+                # 处理打印请求
+                if self.path == '/api/print/label':
+                    self._handle_print_label(data)
+                elif self.path == '/api/print/receipt':
+                    self._handle_print_receipt(data)
+                else:
+                    self.send_error(404, "API端点不存在")
+
+            elif content_type.startswith('multipart/form-data'):
+                # 处理表单数据，包含文件上传
+                if self.path == '/api/print/label_img':
+                    self._handle_print_label_img()
+                else:
+                    self.send_error(404, "API端点不存在")
             else:
-                self.send_error(404, "API端点不存在")
+                self.send_error(415, "不支持的媒体类型")
+
         except Exception as e:
             logger.error(f"处理POST请求出错: {e}")
             traceback.print_exc()
@@ -114,7 +133,7 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
             # 首先检查标签打印机是否可用
             if not self.printer_manager.is_label_printer_available():
                 self._send_json_response({
-                    'success': False,
+                    'code': 300,
                     'message': "Label printer not available"
                 })
                 return
@@ -124,23 +143,109 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
                 self.send_error(400, "Missing content field")
                 return
 
-            # 获取打印机名称
-            printer_name = data.get('printer', None)
-            if not printer_name:
-                printer_name = self.printer_manager.settings.get("label_printer", "")
-
             # 打印标签
-            success = self.printer_manager.print_label(printer_name, data['content'])
+            rs, message = self.printer_manager.print_label(data['content'])
 
             # 返回结果
             self._send_json_response({
-                'success': success,
-                'message': "Label printed successfully" if success else "Failed to print label"
+                'code': 0 if rs else 400,
+                'message': "Label printed successfully" if rs else message
             })
         except Exception as e:
             logger.error(f"Error handling label print request: {e}")
             traceback.print_exc()
             self.send_error(500, "Error processing label print request")
+
+    def _handle_print_label_img(self):
+        """处理图片标签打印请求"""
+        try:
+            # 首先检查标签打印机是否可用
+            if not self.printer_manager.is_label_printer_available():
+                self._send_json_response({
+                    'code': 300,
+                    'message': "Label printer not available"
+                })
+                return
+
+            # 解析表单数据
+            content_type = self.headers.get('Content-Type', '')
+            content_length = int(self.headers.get('Content-Length', 0))
+
+            # 获取boundary
+            boundary = None
+            for param in content_type.split(';'):
+                param = param.strip()
+                if param.startswith('boundary='):
+                    boundary = param[9:]
+                    if boundary.startswith('"') and boundary.endswith('"'):
+                        boundary = boundary[1:-1]
+                    break
+
+            if not boundary:
+                self._send_json_response({
+                    'code': 400,
+                    'message': "Missing boundary in content-type"
+                })
+                return
+
+            # 读取完整的请求体
+            post_data = self.rfile.read(content_length)
+
+            # 解析multipart/form-data
+            image_data = None
+            filename = None
+
+            # 按boundary分隔表单数据
+            boundary_bytes = f'--{boundary}'.encode('utf-8')
+            parts = post_data.split(boundary_bytes)
+
+            # 遍历所有部分寻找图片数据
+            for part in parts:
+                if b'Content-Disposition: form-data; name="image"' in part:
+                    # 找到文件名
+                    filename_match = re.search(b'filename="(.+?)"', part)
+                    if filename_match:
+                        filename = filename_match.group(1).decode('utf-8')
+
+                    # 分离头部和内容
+                    header_end = part.find(b'\r\n\r\n')
+                    if header_end > 0:
+                        image_data = part[header_end + 4:]  # +4是跳过\r\n\r\n
+                        # 移除尾部的\r\n
+                        if image_data.endswith(b'\r\n'):
+                            image_data = image_data[:-2]
+                    break
+
+            if not image_data or not filename:
+                self._send_json_response({
+                    'code': 400,
+                    'message': "Missing image file"
+                })
+                return
+
+            # 获取文件格式
+            file_ext = os.path.splitext(filename)[1].lower().lstrip('.')
+            if not file_ext or file_ext not in ['png', 'jpg', 'jpeg', 'bmp', 'gif']:
+                file_ext = 'png'  # 默认格式
+
+            logger.info(f"接收到图片文件: {filename}, 大小: {len(image_data)} 字节")
+
+            # 打印图片标签
+            success, message = self.printer_manager.print_label_image(image_data, file_ext)
+
+            # 返回结果
+            self._send_json_response({
+                'code': 0 if success else 400,
+                'message': "Image label printed successfully" if success else message
+            })
+
+        except Exception as e:
+            logger.error(f"处理图片标签打印请求出错: {e}")
+            traceback.print_exc()
+            self._send_json_response({
+                'code': 500,
+                'message': f"Error processing image label print request: {str(e)}"
+            })
 
     def _handle_print_receipt(self, data):
         """处理小票打印请求"""
@@ -158,13 +263,9 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
                 self.send_error(400, "Missing content field")
                 return
 
-            # 获取打印机名称
-            printer_name = data.get('printer', None)
-            if not printer_name:
-                printer_name = self.printer_manager.settings.get("receipt_printer", "")
 
             # 打印小票
-            success = self.printer_manager.print_receipt(printer_name, data['content'])
+            success = self.printer_manager.print_receipt(data['content'])
 
             # 返回结果
             self._send_json_response({

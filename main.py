@@ -42,9 +42,7 @@ class PrintService:
         try:
             # 初始化打印机管理
             logger.info("Starting PrintService")
-            test = self.printer_manager.discover_printers()
-            logger.info(test)
-
+            self.printer_manager.discover_printers()
 
             # 启动服务器
             self._start_servers()
@@ -52,7 +50,8 @@ class PrintService:
             # 启动系统托盘
             self.tray = SystemTray(self)
 
-            self._start_printer_discovery_timer()  # 启动定时器
+            # todo: 启动打印机发现定时器
+            # self._start_printer_discovery_timer()  # 启动定时器
 
             logger.info("Print service started")
         except Exception as e:
