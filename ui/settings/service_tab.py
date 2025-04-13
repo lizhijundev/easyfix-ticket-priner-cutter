@@ -5,7 +5,7 @@ from utils.logger import setup_logger
 logger = setup_logger()
 
 class ServiceTab(QtWidgets.QWidget):
-    # 定义信号
+    # Define signals
     serviceControlRequested = QtCore.pyqtSignal(str)
     
     def __init__(self, settings, socket_server=None, http_server=None):
@@ -16,13 +16,13 @@ class ServiceTab(QtWidgets.QWidget):
         self.init_ui()
 
     def init_ui(self):
-        """初始化服务设置选项卡UI"""
+        """Initialize service settings tab UI"""
         service_layout = QtWidgets.QVBoxLayout()
 
-        # 端口设置
+        # Port settings
         port_group = self.create_port_settings_group()
         
-        # 服务状态显示和控制
+        # Service status display and control
         status_group = self.create_service_status_group()
 
         service_layout.addWidget(port_group)
@@ -31,7 +31,7 @@ class ServiceTab(QtWidgets.QWidget):
         self.setLayout(service_layout)
 
     def create_port_settings_group(self):
-        """创建端口设置组"""
+        """Create port settings group"""
         port_group = QtWidgets.QGroupBox("Port Settings")
         port_layout = QtWidgets.QFormLayout()
 
@@ -52,25 +52,25 @@ class ServiceTab(QtWidgets.QWidget):
         return port_group
         
     def create_service_status_group(self):
-        """创建服务状态组"""
+        """Create service status group"""
         status_group = QtWidgets.QGroupBox("Service Status")
         status_layout = QtWidgets.QVBoxLayout()
 
-        # Socket服务状态
+        # Socket service status
         socket_status = QtWidgets.QHBoxLayout()
         socket_status.addWidget(QtWidgets.QLabel("Socket Service:"))
         self.socket_status_label = self.create_status_label(self.socket_server is not None)
         socket_status.addWidget(self.socket_status_label)
         socket_status.addStretch(1)
 
-        # HTTP服务状态
+        # HTTP service status
         http_status = QtWidgets.QHBoxLayout()
-        http_status.addWidget(QtWidgets.QLabel("HTTP Service:"))
+        http_status.addWidget(QtWidgets.QLabel("HTTP (Flask) Service:"))
         self.http_status_label = self.create_status_label(self.http_server is not None)
         http_status.addWidget(self.http_status_label)
         http_status.addStretch(1)
 
-        # Socket服务链接
+        # Socket service link
         socket_link = QtWidgets.QHBoxLayout()
         socket_link.addWidget(QtWidgets.QLabel("Socket:"))
         socket_url = f"localhost:{self.socket_port_spin.value()}"
@@ -81,7 +81,7 @@ class ServiceTab(QtWidgets.QWidget):
         socket_link.addWidget(socket_link_label)
         socket_link.addStretch(1)
 
-        # HTTP服务链接
+        # HTTP service link
         http_link = QtWidgets.QHBoxLayout()
         http_link.addWidget(QtWidgets.QLabel("HTTP:"))
         http_url = f"http://localhost:{self.http_port_spin.value()}"
@@ -91,7 +91,7 @@ class ServiceTab(QtWidgets.QWidget):
         http_link.addWidget(http_link_label)
         http_link.addStretch(1)
 
-        # 服务控制按钮
+        # Service control buttons
         control_buttons = self.create_service_control_buttons()
 
         status_layout.addLayout(socket_status)
@@ -104,7 +104,7 @@ class ServiceTab(QtWidgets.QWidget):
         return status_group
     
     def create_service_control_buttons(self):
-        """创建服务控制按钮"""
+        """Create service control buttons"""
         control_buttons = QtWidgets.QHBoxLayout()
 
         self.restart_btn = QtWidgets.QPushButton("Restart Services")
@@ -124,13 +124,13 @@ class ServiceTab(QtWidgets.QWidget):
         return control_buttons
     
     def create_status_label(self, is_running):
-        """创建状态标签"""
+        """Create status label"""
         label = QtWidgets.QLabel("Running" if is_running else "Stopped")
         label.setStyleSheet("color: green; font-weight: bold;" if is_running else "color: red; font-weight: bold;")
         return label
 
     def _copy_to_clipboard(self, text):
-        """复制文本到剪贴板"""
+        """Copy text to clipboard"""
         try:
             clipboard = QtWidgets.QApplication.clipboard()
             clipboard.setText(text)
@@ -139,7 +139,7 @@ class ServiceTab(QtWidgets.QWidget):
             logger.error(f"Failed to copy to clipboard: {e}")
     
     def update_service_status(self, is_running):
-        """更新服务状态显示"""
+        """Update service status display"""
         status_text = "Running" if is_running else "Stopped"
         status_style = "color: green; font-weight: bold;" if is_running else "color: red; font-weight: bold;"
         
@@ -151,8 +151,8 @@ class ServiceTab(QtWidgets.QWidget):
         self.start_btn.setEnabled(not is_running)
     
     def save_settings(self):
-        """保存当前标签页的设置"""
-        # 保存端口设置
+        """Save current tab settings"""
+        # Save port settings
         self.settings.set("socket_port", self.socket_port_spin.value())
         self.settings.set("http_port", self.http_port_spin.value())
         

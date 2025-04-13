@@ -1,6 +1,6 @@
+# Python dependencies
 PyQt6>=6.0.0
 Flask>=2.0.0
-pycups>=2.0.1; sys_platform == "darwin"
-pyobjc>=8.0; sys_platform == "darwin"
-pywin32>=300; sys_platform == "win32"
-reportlab>=3.6.0
+Pillow>=8.0.0
+pycups>=2.0.0; platform_system != "Windows"  # Linux/macOS only
+pywin32>=228; platform_system == "Windows"  # Windows only

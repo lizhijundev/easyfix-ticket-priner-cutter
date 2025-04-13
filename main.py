@@ -2,7 +2,7 @@
 import sys
 import signal
 import traceback
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import QTimer  # 添加 QTimer 用于定时任务
 from ui.tray import SystemTray
 from printer.manager import PrinterManager
@@ -13,6 +13,14 @@ from utils.logger import setup_logger
 
 # 设置日志记录
 logger = setup_logger()
+
+# 检查 Flask 依赖
+try:
+    import flask
+except ImportError:
+    print("Flask 未安装，请先执行 pip install flask")
+    QMessageBox.critical(None, "缺少依赖", "Flask 未安装，请先执行 pip install flask")
+    sys.exit(1)
 
 # 设置全局异常处理
 def global_exception_handler(exctype, value, tb):
@@ -193,3 +201,4 @@ if __name__ == "__main__":
         logger.critical(f"Main program exception: {e}")
         traceback.print_exc()
         sys.exit(1)
+
