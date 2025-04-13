@@ -74,7 +74,7 @@ class SystemTray(QSystemTrayIcon):
         """手动切纸功能"""
         try:
             logger.info("Manual paper cut requested from tray menu")
-            success, message = self.service.printer_manager.manual_cut_receipt()
+            success, message = self.service.printer_manager.printer.manual_cut_receipt()
             if success:
                 self.show_notification("Paper Cut", message)
             else:

@@ -4,10 +4,10 @@ from utils.logger import setup_logger
 logger = setup_logger()
 
 class LabelTab(QtWidgets.QWidget):
-    def __init__(self, settings, printer_manager):
+    def __init__(self, settings, printer):
         super().__init__()
         self.settings = settings
-        self.printer_manager = printer_manager
+        self.printer = printer
         self.init_ui()
 
     def init_ui(self):
@@ -18,7 +18,7 @@ class LabelTab(QtWidgets.QWidget):
         label_printer_form = QtWidgets.QFormLayout()
         
         # 获取标签打印机列表
-        printers = self.printer_manager.get_label_printers()
+        printers = self.printer.get_label_printers()
         
         self.label_printer_combo = self.create_printer_combo(
             printers, "label_printer")
@@ -98,8 +98,8 @@ class LabelTab(QtWidgets.QWidget):
     
     def update_label_printer_status(self):
         """更新标签打印机状态显示"""
-        self.printer_manager.discover_printers()  # 重新检查打印机状态
-        is_available = self.printer_manager.is_label_printer_available()
+        self.printer.discover_printers()  # 重新检查打印机状态
+        is_available = self.printer.is_label_printer_available()
         status_text = "Available" if is_available else "Not Available"
         status_style = "color: green; font-weight: bold;" if is_available else "color: red; font-weight: bold;"
         self.label_printer_status.setText(status_text)

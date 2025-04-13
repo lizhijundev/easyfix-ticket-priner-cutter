@@ -9,14 +9,14 @@ class SettingsDialog(QtWidgets.QDialog):
     # 添加信号
     settingsChanged = QtCore.pyqtSignal()
 
-    def __init__(self, settings, printer_manager, socket_server=None, http_server=None):
+    def __init__(self, settings, printer, socket_server=None, http_server=None):
         try:
             super().__init__()
             self.setWindowTitle("Settings")
             self.resize(600, 450)
 
             self.settings = settings
-            self.printer_manager = printer_manager
+            self.printer = printer
             self.socket_server = socket_server
             self.http_server = http_server
             
@@ -41,8 +41,8 @@ class SettingsDialog(QtWidgets.QDialog):
             tabs = QtWidgets.QTabWidget()
             
             # 创建各个选项卡
-            self.receipt_tab = ReceiptTab(self.settings, self.printer_manager)
-            self.label_tab = LabelTab(self.settings, self.printer_manager)
+            self.receipt_tab = ReceiptTab(self.settings, self.printer)
+            self.label_tab = LabelTab(self.settings, self.printer)
             self.service_tab = ServiceTab(self.settings, self.socket_server, self.http_server)
             
             # 连接服务控制信号

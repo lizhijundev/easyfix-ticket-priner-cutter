@@ -69,6 +69,39 @@ class Templates:
     File content: The image file to print
 </code></pre>
             </div>
+            
+            <div class="api">
+                <h3>Print Engineer Order Label</h3>
+                <p><strong>URL:</strong> <code>/api/print/label/engineer_order</code></p>
+                <p><strong>Method:</strong> POST</p>
+                <p><strong>Body:</strong></p>
+                <pre><code>{
+    "time": "2025-04-23 06:13:33",
+    "user": "lzj，18320181200",
+    "device": "iPhone 13Pro max, 蓝色， 512g",
+    "fault_data": [
+        {
+            "fault_name": "屏幕问题",
+            "fault_plan": [
+                "换屏幕",
+                "换内屏"
+            ]
+        },
+        {
+            "fault_name": "其他问题",
+            "fault_plan": [
+                "升级内存 1T",
+                "换电池"
+            ]
+        }
+    ],
+    "notice": [
+        "是否备份",
+        "是否关闭查找？",
+        "屏幕密码："
+    ]
+}</code></pre>
+            </div>
         </body>
         </html>
         """

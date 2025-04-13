@@ -50,7 +50,7 @@ class PrintService:
         try:
             # 初始化打印机管理
             logger.info("Starting PrintService")
-            self.printer_manager.discover_printers()
+            self.printer_manager.printer.discover_printers()
 
             # 启动服务器
             self._start_servers()
@@ -59,7 +59,7 @@ class PrintService:
             self.tray = SystemTray(self)
 
             # todo: 启动打印机发现定时器
-            # self._start_printer_discovery_timer()  # 启动定时器
+            self._start_printer_discovery_timer()  # 启动定时器
 
             logger.info("Print service started")
         except Exception as e:
@@ -70,8 +70,8 @@ class PrintService:
     def _start_printer_discovery_timer(self):
         """启动定时器以定期发现打印机"""
         self.printer_discovery_timer = QTimer()
-        self.printer_discovery_timer.timeout.connect(self.printer_manager.discover_printers)
-        self.printer_discovery_timer.start(5000)  # 每5秒调用一次 discover_printers
+        self.printer_discovery_timer.timeout.connect(self.printer_manager.printer.discover_printers)
+        self.printer_discovery_timer.start(10000)  # 每5秒调用一次 discover_printers
         logger.info("Printer discovery timer started")
 
     def _start_servers(self):
@@ -86,8 +86,8 @@ class PrintService:
             if self.http_server:
                 self.http_server.stop()
 
-            self.socket_server = SocketServer(socket_port, self.printer_manager)
-            self.http_server = HttpServer(http_port, self.printer_manager)
+            self.socket_server = SocketServer(socket_port, self.printer_manager.printer)
+            self.http_server = HttpServer(http_port, self.printer_manager.printer)
 
             self.socket_server.start()
             self.http_server.start()
@@ -144,7 +144,7 @@ class PrintService:
             from ui.settings_dialog import SettingsDialog
             self.settings_dialog = SettingsDialog(
                 self.settings,
-                self.printer_manager,
+                self.printer_manager.printer,
                 socket_server=self.socket_server,
                 http_server=self.http_server
             )

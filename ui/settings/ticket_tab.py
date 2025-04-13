@@ -4,10 +4,10 @@ from utils.logger import setup_logger
 logger = setup_logger()
 
 class ReceiptTab(QtWidgets.QWidget):
-    def __init__(self, settings, printer_manager):
+    def __init__(self, settings, printer):
         super().__init__()
         self.settings = settings
-        self.printer_manager = printer_manager
+        self.printer = printer
         self.init_ui()
 
     def init_ui(self):
@@ -18,7 +18,7 @@ class ReceiptTab(QtWidgets.QWidget):
         printer_form = QtWidgets.QFormLayout()
         
         # 获取小票打印机列表
-        printers = self.printer_manager.get_receipt_printers()
+        printers = self.printer.get_receipt_printers()
         
         self.receipt_printer_combo = self.create_printer_combo(
             printers, "receipt_printer")
@@ -51,7 +51,7 @@ class ReceiptTab(QtWidgets.QWidget):
         # 手动切纸按钮
         self.cut_paper_btn = QtWidgets.QPushButton("Manual Paper Cut")
         self.cut_paper_btn.clicked.connect(self.on_cut_paper)
-        self.cut_paper_btn.setEnabled(self.printer_manager.is_receipt_printer_available())
+        self.cut_paper_btn.setEnabled(self.printer.is_receipt_printer_available())
 
         receipt_layout.addLayout(printer_form)
         receipt_layout.addLayout(width_layout)
@@ -74,8 +74,8 @@ class ReceiptTab(QtWidgets.QWidget):
 
     def update_receipt_printer_status(self):
         """更新小票打印机状态显示"""
-        self.printer_manager.discover_printers()  # 重新检查打印机状态
-        is_available = self.printer_manager.is_receipt_printer_available()
+        self.printer.discover_printers()  # 重新检查打印机状态
+        is_available = self.printer.is_receipt_printer_available()
         status_text = "Available" if is_available else "Not Available"
         status_style = "color: green; font-weight: bold;" if is_available else "color: red; font-weight: bold;"
         self.receipt_printer_status.setText(status_text)
@@ -84,7 +84,7 @@ class ReceiptTab(QtWidgets.QWidget):
     def on_cut_paper(self):
         """手动切纸按钮点击事件"""
         try:
-            success, message = self.printer_manager.manual_cut_receipt()
+            success, message = self.printer.manual_cut_receipt()
             if success:
                 QtWidgets.QMessageBox.information(self, "Success", message)
             else:

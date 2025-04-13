@@ -9,14 +9,14 @@ from utils.logger import setup_logger
 logger = setup_logger()
 
 class HttpServer:
-    def __init__(self, port, printer_manager):
+    def __init__(self, port, printer):
         try:
             self.port = port
-            self.printer_manager = printer_manager
+            self.printer = printer
             self.running = False
             self.server = None
             self.server_thread = None
-            self.flask_app = create_flask_app(printer_manager)
+            self.flask_app = create_flask_app(printer)
             logger.info(f"Flask HTTP server initialized on port: {port}")
         except Exception as e:
             logger.critical(f"Failed to initialize HTTP server: {e}")
