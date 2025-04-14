@@ -305,7 +305,7 @@ class MacPrinter:
             return False, f"Error: {str(e)}"
 
 
-    def print_label_image(self, image_file_path: str) -> Tuple[bool, str]:
+    def print_label_image(self, label_image: str) -> Tuple[bool, str]:
         """打印标签"""
         try:
             import math
@@ -336,45 +336,96 @@ class MacPrinter:
 
 
             # 1. 图像预处理（增强对比度）
-            img = Image.open(image_file_path).convert('1')
+            img = label_image.convert("L")
+
             # 获取图片的宽度和高度
             width, height = img.size
+            logger.info(f"Original image size: {width}x{height}")
 
             # 确保宽度是 8 的倍数（TSPL 要求）
             if width % 8 != 0:
                 width = (width // 8 + 1) * 8
                 img = img.resize((width, height))
 
+            logger.info(f"Justify Label image size: {width}x{height}")
+
+            # 应用二值化（黑白处理）
+            # 使用 point() 方法，根据阈值（例如 128）将像素值分为黑或白
+            threshold = 128  # 设置阈值
+            img = img.point(lambda x: 255 if x > threshold else 0, mode='1')
+
+            save_path = os.path.join('/tmp', 'label_image.bmp')
+            img.save(save_path, format='BMP')
+            logger.info(f"Image saved to temporary file: {save_path}")
+
             # 获取图片像素数据
             pixels = img.load()
+            # # 2. 创建一个新的图像对象
+            # new_img = Image.new('1', (width, height), 1)  # 白色背景
+            # draw = ImageDraw.Draw(new_img)
+            # # 3. 绘制图像
+            # for h in range(height):
+            #     for w in range(width):
+            #         print(f"Pixel ({w}, {h}): {pixels[w, h]}")
+            #         # 如果是黑色像素，则绘制为黑色
+            #         if pixels[w, h] == 0:  # 黑色像素
+            #             draw.point((w, h), fill='black')
+            #         else:  # 白色像素
+            #             draw.point((w, h), fill='white')
+            # # 4. 保存图像为临时文件
+            # save_path = os.path.join('/tmp', 'label_image.bmp')
+            # new_img.save(save_path, format='BMP')
+            # logger.info(f"Image saved to temporary file: {save_path}")
 
             # 将像素数据转换为位图数据
             bitmap_data = []
             for h in range(height):
-                row_data = 0
+                byte = 0
                 for w in range(width):
-                    # 每 8 个像素组成一个字节
-                    if pixels[w, h] == 0:  # 黑色像素
-                        row_data |= (1 << (7 - (w % 8)))
-                    if w % 8 == 7:  # 每 8 位写入一次
-                        bitmap_data.append(row_data)
-                        row_data = 0
+                    # print(f"Pixel ({w}, {h}): {pixels[w, h]}")
+                    # 如果是黑色像素，则设置对应的位为 0
+                    if pixels[w, h] == 255:  # 白色像素
+                        byte |= (1 << (7 - (w % 8)))
+                    if w % 8 == 7:  # 每 8 个像素组成一个字节
+                        bitmap_data.append(byte)
+                        byte = 0
                 if width % 8 != 0:  # 补齐最后一个字节
-                    bitmap_data.append(row_data)
+                    bitmap_data.append(byte)
 
+            # 将位图数据转换为 16 进制字符串
+            hex_data = ','.join(f'{byte:02X}' for byte in bitmap_data)
+            #
+            logger.info(f"Bitmap width byte: {width // 8}, height: {height}")
             tspl_command = [
                 "SIZE 50 mm,40 mm",
                 "GAP 2 mm,0",
                 "DIRECTION 1",
                 "CLS",
-                f"BITMAP 0,0,{width // 8},{height},0,{','.join(f'{b}' for b in bitmap_data)}",
+                f"BITMAP 0,0,{width // 8},{height},0,{hex_data}",
                 "PRINT 1",
                 "END"
             ]
 
+            # 这是官方的测试数据
+            # hex_test = "00 00 00 00 00 00 07 FF 03 FF 11 FF 18 FF 1C 7F 1E 3F 1F 1F 1F 8F 1F C7 1F E3 1F E7 1F FF 1F FF"
+            # 测试数据
+            # hex_test = "FF,FF,00,00,FF,FF,00,00,FF,00,00,FF,FF,00,00,FF,00,00,FF,FF,00,00,FF,00,00,FF,FF,00,00"
+            # hex_test = "FF,FF,FF,FF,FF,FF,FF,FF,FF,FF,FF,FF,FF,FF,FF,FF"
+            # tspl_command = [
+            #     "SIZE 50 mm,40 mm",
+            #     "GAP 2 mm,0",
+            #     "DIRECTION 1",
+            #     "CLS",
+            #     f"BITMAP 30,30,2,16,1,{hex_test}",
+            #     "PRINT 1",
+            #     "END"
+            # ]
+
+
             options = {
                 "raw": "true",
                 "media": "Custom.50x40mm",
+                "fit-to-page": "true",
             }
             # 创建临时文件保存标签数据
             try:
@@ -392,7 +443,7 @@ class MacPrinter:
                     "Label Image Print",
                     options
                 )
-                #
+
                 # job_id = 1
                 logger.info(f"Printing job sent with ID: {job_id}")
 

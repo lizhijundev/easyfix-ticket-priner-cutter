@@ -211,10 +211,10 @@ class APIHandlers:
                     }), 400
 
             # Format engineer order label content
-            label_image_path = self._format_engineer_order_label(data)
+            label_image = self._format_engineer_order_label(data)
             
             # Print label
-            rs, message = self.printer.print_label_image(label_image_path)
+            rs, message = self.printer.print_label_image(label_image)
 
             rs = True
             # Return result
@@ -264,20 +264,20 @@ class APIHandlers:
 
 
             # 绘制一张空白的标签， 50mm x 40mm
-            label_canvas = Image.new('RGB', (width_px, height_px), color='white')
-            draw = ImageDraw.Draw(label_canvas)
+            label_image = Image.new('RGB', (width_px, height_px), color='white')
+            draw = ImageDraw.Draw(label_image)
 
 
             # # 添加logo
             # if 'logo' in data and data['logo']:
             #     logo = Image.open(io.BytesIO(data['logo']))
             #     logo = logo.resize((100, 100), Image.ANTIALIAS)
-            #     label_canvas.paste(logo, (10, 10))
+            #     label_image.paste(logo, (10, 10))
             # # 添加二维码
             # if 'qr_url' in data and data['qr_url']:
             #     qr_code = qrcode.make(data['qr_url'])
             #     qr_code = qr_code.resize((100, 100), Image.ANTIALIAS)
-            #     label_canvas.paste(qr_code, (400, 10))
+            #     label_image.paste(qr_code, (400, 10))
             # 添加其他信息
             # 添加标题
             draw.text((10, 5), "Easyfix.vn", fill="black", font=font_16)
@@ -309,9 +309,10 @@ class APIHandlers:
                     draw.text((20, 320 + i * 20), f"* {notice}", fill="black", font=font_16)
             # 保存标签内容为图片，并输出路径
             label_image_path = os.path.join(os.getcwd(), 'engineer_order_label.png')
-            label_canvas.save(label_image_path)
+            label_image.save(label_image_path)
             # 返回标签图片路径
-            return label_image_path
+            # return label_image_path
+            return label_image
 
 
 
