@@ -5,6 +5,7 @@ import traceback
 from typing import List, Tuple, Optional
 from utils.logger import setup_logger
 from config.settings import Settings
+from PIL import Image, ImageDraw, ImageFont
 
 
 logger = setup_logger(__name__)
@@ -68,14 +69,14 @@ class MacPrinter:
         """获取小票打印机列表"""
         all_printers = self.get_all_printers()
         receipt_printers = [p for p in all_printers if RECEIPT_PRINTER_NAME in p]
-        logger.debug(f"Found receipt printers: {receipt_printers}")
+        # logger.debug(f"Found receipt printers: {receipt_printers}")
         return receipt_printers
 
     def get_label_printers(self) -> List[str]:
         """获取标签打印机列表"""
         all_printers = self.get_all_printers()
         label_printers = [p for p in all_printers if LABEL_PRINTER_NAME in p]
-        logger.debug(f"Found label printers: {label_printers}")
+#         logger.debug(f"Found label printers: {label_printers}")
         return label_printers
 
     def check_printer_availability(self, printer_type: str) -> bool:
@@ -96,7 +97,7 @@ class MacPrinter:
 
             return self._check_usb_printer(printer_name)
         except Exception as e:
-            logger.error(f"Failed to check {printer_type} printer availability: {e}")
+            # logger.error(f"Failed to check {printer_type} printer availability: {e}")
             return False
 
 
@@ -110,7 +111,7 @@ class MacPrinter:
 
                 # 检查打印机是否在连接的打印机列表中
                 if (printer_name not in printers):
-                    logger.warning(f"Printer '{printer_name}' not found in the system")
+                    # logger.warning(f"Printer '{printer_name}' not found in the system")
                     return False
 
                 # 获取打印机状态
@@ -120,7 +121,7 @@ class MacPrinter:
                 # 检查是否有错误状态
                 printer_state_reasons = printer_attrs.get("printer-state-reasons", [])
 
-                logger.debug(f"Printer '{printer_name}' state: {printer_state}, reasons: {printer_state_reasons}")
+                # logger.debug(f"Printer '{printer_name}' state: {printer_state}, reasons: {printer_state_reasons}")
 
                 # 如果打印机状态包含offline-report，表示打印机离线
                 if "offline-report" in " ".join(printer_state_reasons):
@@ -133,11 +134,11 @@ class MacPrinter:
                 return False
 
             except Exception as cups_error:
-                logger.warning(f"Failed to check printer with cups: {cups_error}, falling back to subprocess")
+                # logger.warning(f"Failed to check printer with cups: {cups_error}, falling back to subprocess")
                 return self._check_usb_printer_fallback(printer_name)
 
         except ImportError:
-            logger.warning("cups module not available, falling back to subprocess")
+            # logger.warning("cups module not available, falling back to subprocess")
             return self._check_usb_printer_fallback(printer_name)
 
 
@@ -160,7 +161,7 @@ class MacPrinter:
             output = result.stdout.lower()
             return "idle" in output or "ready" in output
         except Exception as e:
-            logger.error(f"Error checking macOS USB printer: {e}")
+            # logger.error(f"Error checking macOS USB printer: {e}")
             return False
 
 
@@ -216,7 +217,7 @@ class MacPrinter:
             return False, f"Failed to cut paper: {str(e)}"
 
 
-    def print_label(self, label_data: str) -> Tuple[bool, str]:
+    def print_label_text(self, label_data: str) -> Tuple[bool, str]:
         """打印标签"""
         try:
             if not self.label_printer_available:
@@ -259,12 +260,11 @@ class MacPrinter:
                 "raw": "true",
                 "media": "Custom.50x40mm",
             }
-
             # 创建临时文件保存标签数据
-            temp_file_path = "/tmp/tspl_job.txt"
             try:
-                with open(temp_file_path, "w") as f:
+                with tempfile.NamedTemporaryFile(mode='w+', suffix='.tspl', delete=False) as f:
                     f.write("\r\n".join(tspl_command))
+                    temp_file_path = f.name
 
                 logger.info(f"TSPL commands written to temp file: {temp_file_path}")
                 logger.debug(f"TSPL content: {tspl_command}")
@@ -287,14 +287,13 @@ class MacPrinter:
                     return False, "Failed to send TSPL print job"
 
             finally:
-                pass
-            #     # 确保临时文件被删除
-            #     if temp_file_path and os.path.exists(temp_file_path):
-            #         try:
-            #             os.unlink(temp_file_path)
-            #             logger.debug(f"Temporary file {temp_file_path} removed")
-            #         except Exception as e:
-            #             logger.warning(f"Failed to delete temporary file: {e}")
+                # 确保临时文件被删除
+                if temp_file_path and os.path.exists(temp_file_path):
+                    try:
+                        os.unlink(temp_file_path)
+                        logger.debug(f"Temporary file {temp_file_path} removed")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete temporary file: {e}")
 
         except cups.IPPError as ipp_err:
             error_code, error_message = ipp_err.args
@@ -305,3 +304,120 @@ class MacPrinter:
             traceback.print_exc()
             return False, f"Error: {str(e)}"
 
+
+    def print_label_image(self, image_file_path: str) -> Tuple[bool, str]:
+        """打印标签"""
+        try:
+            import math
+            if not self.label_printer_available:
+                logger.warning("Label printer not available")
+                return False, "Label printer not available"
+
+            printer_name = self.settings.get("label_printer", "")
+            if not printer_name:
+                logger.warning("No label printer selected")
+                return False, "No label printer selected"
+
+            conn = cups.Connection()
+            # 检查打印机状态
+            printer_info = conn.getPrinters().get(printer_name)
+            if not printer_info:
+                logger.error(f"Can't find printer [{printer_name}]")
+                return False, f"Can't find printer [{printer_name}]"
+
+            # 打印详细的打印机状态信息，帮助调试
+            logger.info(f"Printer {printer_name} status: {printer_info['printer-state']}, "
+                        f"state-message: {printer_info.get('printer-state-message', '')}, "
+                        f"reasons: {printer_info.get('printer-state-reasons', [])}")
+
+            if printer_info['printer-state'] != 3:  # 3表示空闲
+                logger.warning(f"Printer state is {printer_info['printer-state']}, not ready (3=idle)")
+                return False, "Printer is busy or unavailable"
+
+
+            # 1. 图像预处理（增强对比度）
+            img = Image.open(image_file_path).convert('1')
+            # 获取图片的宽度和高度
+            width, height = img.size
+
+            # 确保宽度是 8 的倍数（TSPL 要求）
+            if width % 8 != 0:
+                width = (width // 8 + 1) * 8
+                img = img.resize((width, height))
+
+            # 获取图片像素数据
+            pixels = img.load()
+
+            # 将像素数据转换为位图数据
+            bitmap_data = []
+            for h in range(height):
+                row_data = 0
+                for w in range(width):
+                    # 每 8 个像素组成一个字节
+                    if pixels[w, h] == 0:  # 黑色像素
+                        row_data |= (1 << (7 - (w % 8)))
+                    if w % 8 == 7:  # 每 8 位写入一次
+                        bitmap_data.append(row_data)
+                        row_data = 0
+                if width % 8 != 0:  # 补齐最后一个字节
+                    bitmap_data.append(row_data)
+
+            tspl_command = [
+                "SIZE 50 mm,40 mm",
+                "GAP 2 mm,0",
+                "DIRECTION 1",
+                "CLS",
+                f"BITMAP 0,0,{width // 8},{height},0,{','.join(f'{b}' for b in bitmap_data)}",
+                "PRINT 1",
+                "END"
+            ]
+
+            options = {
+                "raw": "true",
+                "media": "Custom.50x40mm",
+            }
+            # 创建临时文件保存标签数据
+            try:
+                with tempfile.NamedTemporaryFile(mode='w+', suffix='.tspl', delete=False) as f:
+                    f.write("\r\n".join(tspl_command))
+                    temp_file_path = f.name
+
+                logger.info(f"TSPL commands written to temp file: {temp_file_path}")
+                logger.debug(f"TSPL content: {tspl_command}")
+
+                # 使用 CUPS 打印临时文件
+                job_id = conn.printFile(
+                    printer_name,
+                    temp_file_path,
+                    "Label Image Print",
+                    options
+                )
+                #
+                # job_id = 1
+                logger.info(f"Printing job sent with ID: {job_id}")
+
+                if job_id:
+                    logger.info(f"TSPL print job sent to {printer_name}, job ID: {job_id}")
+                    return True, f"TSPL label sent to printer (Job ID: {job_id})"
+                else:
+                    logger.error("Failed to send TSPL print job, no job ID returned")
+                    return False, "Failed to send TSPL print job"
+
+            finally:
+                pass
+                # 确保临时文件被删除
+                # if temp_file_path and os.path.exists(temp_file_path):
+                #     try:
+                #         os.unlink(temp_file_path)
+                #         logger.debug(f"Temporary file {temp_file_path} removed")
+                #     except Exception as e:
+                #         logger.warning(f"Failed to delete temporary file: {e}")
+
+        except cups.IPPError as ipp_err:
+            error_code, error_message = ipp_err.args
+            logger.error(f"IPP Error {error_code}: {error_message}")
+            return False, f"Printer error: {error_message}"
+        except Exception as e:
+            logger.error(f"Failed to print label: {e}")
+            traceback.print_exc()
+            return False, f"Error: {str(e)}"

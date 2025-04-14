@@ -113,23 +113,25 @@ class SystemTray(QSystemTrayIcon):
 
     def exit_app(self):
         """退出应用程序"""
-        try:
-            logger.info("User requested to exit application")
-            reply = QtWidgets.QMessageBox.question(
-                None,
-                'Confirm Exit',
-                'Are you sure you want to exit Print Service?',
-                QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
-                QtWidgets.QMessageBox.StandardButton.No
-            )
-
-            if reply == QtWidgets.QMessageBox.StandardButton.Yes:
-                logger.info("User confirmed exit, stopping service")
-                self.service.stop()
-                self.app.quit()
-                logger.info("Application exited")
-        except Exception as e:
-            logger.critical(f"Failed to exit application: {e}")
-            traceback.print_exc()
-            # 强制退出
-            sys.exit(1)
+        self.service.stop()
+        self.app.quit()
+        # try:
+        #     logger.info("User requested to exit application")
+        #     reply = QtWidgets.QMessageBox.question(
+        #         None,
+        #         'Confirm Exit',
+        #         'Are you sure you want to exit Print Service?',
+        #         QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+        #         QtWidgets.QMessageBox.StandardButton.No
+        #     )
+        #
+        #     if reply == QtWidgets.QMessageBox.StandardButton.Yes:
+        #         logger.info("User confirmed exit, stopping service")
+        #         self.service.stop()
+        #         self.app.quit()
+        #         logger.info("Application exited")
+        # except Exception as e:
+        #     logger.critical(f"Failed to exit application: {e}")
+        #     traceback.print_exc()
+        #     # 强制退出
+        #     sys.exit(1)

@@ -149,7 +149,7 @@ class WindowsPrinter:
             return False, f"Error sending cut command: {str(e)}"
 
 
-    def print_label(self, label_data: str) -> Tuple[bool, str]:
+    def print_label_text(self, label_data: str) -> Tuple[bool, str]:
         """打印标签"""
         try:
             import win32print

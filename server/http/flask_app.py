@@ -25,9 +25,13 @@ def create_flask_app(printer):
     def printer_status():
         return api_handlers.handle_printer_status()
     
-    @app.route('/api/print/label', methods=['POST'])
+    @app.route('/api/print/label/text', methods=['POST'])
     def print_label():
-        return api_handlers.handle_print_label()
+        return api_handlers.handle_print_label_text()
+
+    @app.route('/api/print/label/engineer_order', methods=['POST'])
+    def print_engineer_order():
+        return api_handlers.handle_print_engineer_order()
     
     @app.route('/api/print/receipt', methods=['POST'])
     def print_receipt():
@@ -36,10 +40,7 @@ def create_flask_app(printer):
     @app.route('/api/print/label_img', methods=['POST'])
     def print_label_img():
         return api_handlers.handle_print_label_img()
-    
-    @app.route('/api/print/label/engineer_order', methods=['POST'])
-    def print_engineer_order():
-        return api_handlers.handle_print_engineer_order()
+
     
     # Error handlers
     @app.errorhandler(404)
