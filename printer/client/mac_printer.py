@@ -124,7 +124,7 @@ class MacPrinter:
 
                 # 如果打印机状态包含offline-report，表示打印机离线
                 if "offline-report" in " ".join(printer_state_reasons):
-                    logger.warning(f"Printer '{printer_name}' is offline")
+                    # logger.warning(f"Printer '{printer_name}' is offline")
                     return False
 
                 # 如果状态为3(idle)或4(processing)且没有严重错误，则认为打印机可用
@@ -246,26 +246,25 @@ class MacPrinter:
 
             # ESC/POS 切纸命令
             tspl_command = [
-                "SIZE 60 mm, 50 mm",
-                "GAP 2 mm, 0",
+                "SIZE 50 mm,40 mm",
+                "GAP 2 mm,0",
                 "DIRECTION 1",
                 "CLS",
-                f"TEXT 10, 10, \"3\", 0, 1, 1, \"{label_data}\"",
+                f"TEXT 10,20,\"2\",0,1,1,\"{label_data}\"",
                 "PRINT 1",
                 "END"
             ]
 
             options = {
-                'raw': 'true',
-                'job-priority': '100'
+                "raw": "true",
+                "media": "Custom.50x40mm",
             }
 
             # 创建临时文件保存标签数据
-            temp_file_path = None
+            temp_file_path = "/tmp/tspl_job.txt"
             try:
-                with tempfile.NamedTemporaryFile(delete=False, mode='w') as temp_file:
-                    temp_file.write('\n'.join(tspl_command))
-                    temp_file_path = temp_file.name
+                with open(temp_file_path, "w") as f:
+                    f.write("\r\n".join(tspl_command))
 
                 logger.info(f"TSPL commands written to temp file: {temp_file_path}")
                 logger.debug(f"TSPL content: {tspl_command}")
@@ -280,24 +279,22 @@ class MacPrinter:
 
                 logger.info(f"Printing job sent with ID: {job_id}")
 
-                # 等待短暂时间确保打印作业提交后再删除文件
-                import time
-                time.sleep(0.5)
-
                 if job_id:
                     logger.info(f"TSPL print job sent to {printer_name}, job ID: {job_id}")
                     return True, f"TSPL label sent to printer (Job ID: {job_id})"
                 else:
                     logger.error("Failed to send TSPL print job, no job ID returned")
                     return False, "Failed to send TSPL print job"
+
             finally:
-                # 确保临时文件被删除
-                if temp_file_path and os.path.exists(temp_file_path):
-                    try:
-                        os.unlink(temp_file_path)
-                        logger.debug(f"Temporary file {temp_file_path} removed")
-                    except Exception as e:
-                        logger.warning(f"Failed to delete temporary file: {e}")
+                pass
+            #     # 确保临时文件被删除
+            #     if temp_file_path and os.path.exists(temp_file_path):
+            #         try:
+            #             os.unlink(temp_file_path)
+            #             logger.debug(f"Temporary file {temp_file_path} removed")
+            #         except Exception as e:
+            #             logger.warning(f"Failed to delete temporary file: {e}")
 
         except cups.IPPError as ipp_err:
             error_code, error_message = ipp_err.args
