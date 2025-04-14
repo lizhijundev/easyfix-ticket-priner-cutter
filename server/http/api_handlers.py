@@ -6,6 +6,8 @@ from flask import request, jsonify
 from utils.logger import setup_logger
 from config.settings import Settings
 from PIL import Image, ImageDraw, ImageFont
+from unidecode import unidecode
+import re
 
 logger = setup_logger()
 
@@ -211,10 +213,10 @@ class APIHandlers:
                     }), 400
 
             # Format engineer order label content
-            label_image = self._format_engineer_order_label(data)
+            tspl_commands = self._format_engineer_order_label(data)
             
             # Print label
-            rs, message = self.printer.print_label_image(label_image)
+            rs, message = self.printer.print_label_TSPL(tspl_commands)
 
             rs = True
             # Return result
@@ -229,6 +231,37 @@ class APIHandlers:
                 'code': 500,
                 'message': f"Error processing engineer order label print request: {str(e)}"
             }), 500
+
+    def remove_punctuation(self, text):
+        """
+        对 TSPL 命令中的特殊字符进行转义
+        """
+        # 定义需要转义的特殊字符
+        escape_mapping = {
+            '\\': '\\\\',  # 转义反斜杠
+            '"': '\\"',    # 转义双引号
+            '\'': '\\\'',  # 转义单引号
+            ',': '|',    # 转义逗号
+        }
+
+        # 遍历字符串，将特殊字符替换为转义后的字符
+        escaped_text = "".join(escape_mapping.get(char, char) for char in text)
+        return escaped_text
+
+    def _calc_block_size(self, text, font_width, font_height, container_width):
+        """Calculate the size of the text block"""
+        # 转义文本中的特殊字符，比如逗号
+        text = self.remove_punctuation(text)
+        text = unidecode(text)
+
+        word_count = len(text)
+        # Calculate the number of lines needed to fit the text
+        lines = (word_count * font_width) // container_width + 1
+        # Calculate the height of the text block
+        container_height = lines * font_height
+        return text, container_width, container_height
+
+
     
     def _format_engineer_order_label(self, data):
         """Format engineering order data into label content"""
@@ -246,107 +279,110 @@ class APIHandlers:
                     width_mm, height_mm = 50, 40
             except:
                 width_mm, height_mm = 50, 40
-
             logger.info(f"Label size: {width_mm}x{height_mm}mm")
+            tspl_commands = [
+                f"SIZE {width_mm} mm,{height_mm} mm",
+                "GAP 2 mm,0 mm",
+                "DIRECTION 1",
+                "DENSITY 8",
+                "SPEED 6",
+                "CLS"
+            ]
+            font = "\"2\""
+            font_width = 12
+            font_height = 20
+            common_padding = 10
+            line_botton = 3
 
-            # 假设打印分辨率为203 DPI (8 dots/mm)
-            # 2. 计算像素尺寸（基于203 DPI）
+            # 203dpi 转换为 mm
             dpi = 203
-            width_px = int(width_mm * dpi / 25.4)
-            height_px = int(height_mm * dpi / 25.4)
-            logger.info(f"Label size: {width_px}x{height_px}px")
+            mm_to_dpi = 25.4 / dpi
+            # 计算标签尺寸
+            label_width = int(width_mm / mm_to_dpi)
+            label_height = int(height_mm / mm_to_dpi)
+            # 打印二维码
+            qr_code_size = 60
+            qr_code_x = int(label_width - qr_code_size - common_padding)
+            qr_code_y = int(common_padding)
+            qr_code_data = data.get('qr_url', '')
+            tspl_commands.append(f"QRCODE {qr_code_x},{qr_code_y},H,2,A,0,\"{qr_code_data}\"")
 
-            # 加载字体
-            try:
-                font_16 = ImageFont.truetype(os.getcwd() + '/fonts/NotoSansSC-SemiBold.ttf', 16)
-            except IOError:
-                font_16 = ImageFont.load_default()
+            # 记录 y_offset 位置
+            y_offset = 10
+            # 打印标签时间
+            label_time = data.get('time', '')
+            # 计算文本块大小
+            text, block_width, block_height = self._calc_block_size(label_time, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
+            tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
+            y_offset += block_height + line_botton
+            # tspl_commands.append(f"TEXT {common_padding},{y_offset},{font},0,1,1,\"{label_time}\"")
+            # 打印标签用户
+            label_user = data.get('user', '')
+            # 计算文本块大小
+            text, block_width, block_height = self._calc_block_size(label_user, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
+            tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
+            y_offset += block_height + line_botton
 
+            # 打印标签设备
+            label_device = data.get('device', '')
+            # 计算文本块大小
+            text, block_width, block_height = self._calc_block_size(label_device, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
+            tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
+            y_offset += block_height + line_botton
 
-            # 绘制一张空白的标签， 50mm x 40mm
-            label_image = Image.new('RGB', (width_px, height_px), color='white')
-            draw = ImageDraw.Draw(label_image)
+            # 打印分隔线
+            tspl_commands.append(f"BAR {common_padding},{y_offset},{label_width - common_padding * 2},2")
+            y_offset += 2 + line_botton
 
+            # 打印故障信息
+            fault_data = data.get('fault_data', [])
+            if fault_data and isinstance(fault_data, list):
+                for i, fault in enumerate(fault_data):
+                    fault_name = fault.get('fault_name', f'{i+1}')
+                    # 计算文本块大小
+                    text, block_width, block_height = self._calc_block_size(fault_name, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
+                    tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
+                    y_offset += block_height + line_botton
 
-            # # 添加logo
-            # if 'logo' in data and data['logo']:
-            #     logo = Image.open(io.BytesIO(data['logo']))
-            #     logo = logo.resize((100, 100), Image.ANTIALIAS)
-            #     label_image.paste(logo, (10, 10))
-            # # 添加二维码
-            # if 'qr_url' in data and data['qr_url']:
-            #     qr_code = qrcode.make(data['qr_url'])
-            #     qr_code = qr_code.resize((100, 100), Image.ANTIALIAS)
-            #     label_image.paste(qr_code, (400, 10))
-            # 添加其他信息
-            # 添加标题
-            draw.text((10, 5), "Easyfix.vn", fill="black", font=font_16)
-            # 添加额外信息
-            if 'extra' in data and isinstance(data['extra'], list):
-                for i, extra in enumerate(data['extra']):
-                    draw.text((10, 120 + i * 20), extra, fill="black", font=font_16)
-            # 添加分隔线
-            draw.line((0, 50, 500, 50), fill="black", width=2)
-            # 添加标签内容
-            # 添加时间、用户、设备等信息
-            draw.text((10, 110), f"时间: {data.get('time', '')}", fill="black", font=font_16)
-            draw.text((10, 140), f"用户: {data.get('user', '')}", fill="black", font=font_16)
-            draw.text((10, 170), f"设备: {data.get('device', '')}", fill="black", font=font_16)
-            # 添加故障信息
-            if 'fault_data' in data and isinstance(data['fault_data'], list):
-                draw.text((10, 200), "故障信息:", fill="black", font=font_16)
-                for i, fault in enumerate(data['fault_data']):
-                    fault_name = fault.get('fault_name', f'故障 {i+1}')
-                    draw.text((20, 220 + i * 20), f"{i+1}. {fault_name}", fill="black", font=font_16)
-                    # 添加故障处理计划
+                    # 打印故障处理计划
                     if 'fault_plan' in fault and isinstance(fault['fault_plan'], list):
                         for j, plan in enumerate(fault['fault_plan']):
-                            draw.text((40, 240 + (i + j) * 20), f"   - {plan}", fill="black", font=font_16)
-            # 添加注意事项
-            if 'notice' in data and isinstance(data['notice'], list):
-                draw.text((10, 300), "注意事项:", fill="black", font=font_16)
-                for i, notice in enumerate(data['notice']):
-                    draw.text((20, 320 + i * 20), f"* {notice}", fill="black", font=font_16)
-            # 保存标签内容为图片，并输出路径
-            label_image_path = os.path.join(os.getcwd(), 'engineer_order_label.png')
-            label_image.save(label_image_path)
-            # 返回标签图片路径
-            # return label_image_path
-            return label_image
+                            # 计算文本块大小
+                            text, block_width, block_height = self._calc_block_size(plan, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
+                            tspl_commands.append(f"BLOCK {common_padding + 10},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
+                            y_offset += block_height + line_botton
 
 
+            # 打印分隔线
+            tspl_commands.append(f"BAR {common_padding},{y_offset},{label_width - common_padding * 2},2")
+            y_offset += 2 + line_botton
+            # 打印注意事项
+            notice = data.get('notice', [])
+            if notice and isinstance(notice, list):
+                for i, notice_item in enumerate(notice):
+                    # 计算文本块大小
+                    text, block_width, block_height = self._calc_block_size(notice_item, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
+                    tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
+                    y_offset += block_height + line_botton
+            # 打印分隔线
+            tspl_commands.append(f"BAR {common_padding},{y_offset},{label_width - common_padding * 2},2")
+            y_offset += 2 + line_botton
+            # 打印额外信息
+            extra = data.get('extra', [])
+            if extra and isinstance(extra, list):
+                for i, extra_item in enumerate(extra):
+                    # 计算文本块大小
+                    text, block_width, block_height = self._calc_block_size(extra_item, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
+                    tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
+                    y_offset += block_height + line_botton
 
-            # # 构建标签内容
-            # label_lines = []
-            #
-            # # 添加时间和用户信息
-            # label_lines.append(f"时间: {data.get('time', '')}")
-            # label_lines.append(f"用户: {data.get('user', '')}")
-            # label_lines.append(f"设备: {data.get('device', '')}")
-            # label_lines.append("-" * 40)  # 分隔线
-            #
-            # # 添加故障数据
-            # if 'fault_data' in data and isinstance(data['fault_data'], list):
-            #     label_lines.append("故障信息:")
-            #     for i, fault in enumerate(data['fault_data']):
-            #         fault_name = fault.get('fault_name', f'故障 {i+1}')
-            #         label_lines.append(f"{i+1}. {fault_name}")
-            #
-            #         # 添加故障处理计划
-            #         if 'fault_plan' in fault and isinstance(fault['fault_plan'], list):
-            #             for j, plan in enumerate(fault['fault_plan']):
-            #                 label_lines.append(f"   - {plan}")
-            #
-            # label_lines.append("-" * 40)  # 分隔线
-            #
-            # # 添加注意事项
-            # if 'notice' in data and isinstance(data['notice'], list):
-            #     label_lines.append("注意事项:")
-            #     for i, notice in enumerate(data['notice']):
-            #         label_lines.append(f"* {notice}")
-            #
-            # # 合并所有行并返回
-            # return "\n".join(label_lines)
+
+            # 最后结束
+            tspl_commands.append(f"PRINT 1")
+            tspl_commands.append("END")
+
+            return tspl_commands
+
         except Exception as e:
             logger.error(f"Error formatting engineer order label: {e}")
             return f"Error: Could not format engineer order - {str(e)}"
