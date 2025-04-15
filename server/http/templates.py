@@ -76,30 +76,28 @@ class Templates:
                 <p><strong>Method:</strong> POST</p>
                 <p><strong>Body:</strong></p>
                 <pre><code>{
-    "time": "2025-04-23 06:13:33",
-    "user": "lzj，18320181200",
-    "device": "iPhone 13Pro max, 蓝色， 512g",
+    "time": "23/04 06:13",
+    "user": "lzj|18320181200",
+    "device": "iPhone 13 Pro max|64G",
     "fault_data": [
         {
-            "fault_name": "屏幕问题",
+            "fault_name": "Nâng cấp bộ nhớ",
             "fault_plan": [
-                "换屏幕",
-                "换内屏"
-            ]
-        },
-        {
-            "fault_name": "其他问题",
-            "fault_plan": [
-                "升级内存 1T",
-                "换电池"
+                "Nâng cấp bộ nhớ chính hãng lên 256GB",
+                "Nâng cấp bộ nhớ chính hãng lên 256GB"
             ]
         }
     ],
     "notice": [
-        "是否备份",
-        "是否关闭查找？",
-        "屏幕密码："
-    ]
+        '[ ] Cần sao lưu dữ liệu',
+        '[ ] Đã sao lưu',
+        '[ ] Đã đăng xuất tài khoản iCloud？',
+        '[ ] Mật khẩu mở khóa:',
+    ],
+    "extra": [
+        "Note:"
+    ],
+    "qr_url": "https://easyfix.vn/"
 }</code></pre>
             </div>
         </body>
