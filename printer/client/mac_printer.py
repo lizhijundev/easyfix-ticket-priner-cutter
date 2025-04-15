@@ -6,7 +6,6 @@ from typing import List, Tuple, Optional
 from utils.logger import setup_logger
 from config.settings import Settings
 from PIL import Image, ImageDraw, ImageFont
-from escpos.printer import Dummy, Usb
 import time
 
 
@@ -211,14 +210,14 @@ class MacPrinter:
                 return False, "打印机忙或不可用"
 
             # ESC/POS 切纸命令
-            # cut_command = b'\x1B\x40\x1D\x56\x00'
-            p = Dummy()
+            cut_command = b'\x1D\x56\x00'
+            # p = Dummy()
             # 构造 ESC/POS
-            p.text("Hello World\n")
-            p.cut()  # 切纸命令
+            # p.text("Hello World\n")
+            # p.cut()  # 切纸命令
 
             # 获取生成的 ESC/POS 原始指令数据
-            cut_command = p.output
+            # cut_command = p.output
 
             with tempfile.NamedTemporaryFile(delete=False) as temp_file:
                 temp_file.write(cut_command)
