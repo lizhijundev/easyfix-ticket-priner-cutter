@@ -6,6 +6,7 @@ from typing import List, Tuple, Optional
 from utils.logger import setup_logger
 from config.settings import Settings
 from PIL import Image, ImageDraw, ImageFont
+import time
 
 
 logger = setup_logger(__name__)
@@ -26,11 +27,17 @@ class MacPrinter:
 
     def discover_printers(self) -> Tuple[bool, bool]:
         """发现可用打印机并更新状态"""
-        # logger.info("Discovering printers...")
+        logger.info("Discovering printers...")
         try:
-            self.receipt_printer_available = self.check_printer_availability("receipt")
-            self.label_printer_available = self.check_printer_availability("label")
-            # logger.info(f"Discovered printers - Receipt: {self.receipt_printer_available}, Label: {self.label_printer_available}")
+            # 分别检查并保存每个打印机的状态
+            receipt_available = self.check_printer_availability("receipt")
+            label_available = self.check_printer_availability("label")
+
+            # 更新实例变量
+            self.receipt_printer_available = receipt_available
+            self.label_printer_available = label_available
+
+            logger.info(f"Discovered printers - Receipt: {self.receipt_printer_available}, Label: {self.label_printer_available}")
             return self.receipt_printer_available, self.label_printer_available
         except Exception as e:
             # logger.error(f"Failed to discover printers: {e}")
@@ -69,7 +76,7 @@ class MacPrinter:
         """获取小票打印机列表"""
         all_printers = self.get_all_printers()
         receipt_printers = [p for p in all_printers if RECEIPT_PRINTER_NAME in p]
-        # logger.debug(f"Found receipt printers: {receipt_printers}")
+        logger.debug(f"Found receipt printers: {receipt_printers}")
         return receipt_printers
 
     def get_label_printers(self) -> List[str]:
@@ -83,9 +90,10 @@ class MacPrinter:
         """检查特定类型打印机的USB连接状态"""
         try:
             printer_name = self.settings.get(f"{printer_type}_printer", "")
-            if not printer_name:
-                return False
+            # if not printer_name:
+            #     return False
 
+            # 移除调试打印语句
             # 根据打印机类型获取对应的打印机列表
             if printer_type == "receipt":
                 printers = self.get_receipt_printers()
@@ -187,30 +195,46 @@ class MacPrinter:
                 return False, "No receipt printer selected"
 
             logger.info(f"Manual paper cut for printer: {printer_name}")
-
             conn = cups.Connection()
-
-            # ESC/POS 切纸命令
-            cut_command = b'\x1D\x56\x00'
 
             # 检查打印机状态
             printer_info = conn.getPrinters().get(printer_name)
+            # logger.info(f"Printer info: {printer_info}")
+
+            printer_attributes = conn.getPrinterAttributes(printer_name)
+            logger.info(f"printer_attributes: {printer_attributes}")
             if not printer_info:
                 return False, f"打印机 {printer_name} 未找到"
 
             if printer_info['printer-state'] != 3:  # 3表示空闲
                 return False, "打印机忙或不可用"
 
+            # ESC/POS 切纸命令
+            cut_command = b'\x1B\x40\x1D\x56\x00'
+            # p = Dummy()
+            # 构造 ESC/POS
+            # p.text("Hello World\n")
+            # p.cut()  # 切纸命令
+
+            # 获取生成的 ESC/POS 原始指令数据
+            # cut_command = p.output
+
             with tempfile.NamedTemporaryFile(delete=False) as temp_file:
                 temp_file.write(cut_command)
                 temp_file_path = temp_file.name
-
+            # 获取当前时间戳
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
             # 使用 CUPS 打印临时文件
-            conn.printFile(printer_name, temp_file_path,
-                           "Cut Command", {"raw": "true"})
+            job_id = conn.printFile(
+                printer_name,
+                temp_file_path,
+                f"Cut Command {timestamp}",
+                {
+                    "raw": "true",
+                })
 
             os.remove(temp_file_path)
-            logger.info("Paper cut command sent successfully")
+            logger.info(f"Paper cut command sent successfully job_id:{job_id},cut_command:{cut_command}")
             return True, "Paper cut successful"
         except Exception as e:
             logger.error(f"Error during manual paper cut: {e}")
@@ -548,3 +572,5 @@ class MacPrinter:
             logger.error(f"Failed to print label: {e}")
             traceback.print_exc()
             return False, f"Error: {str(e)}"
+
+
