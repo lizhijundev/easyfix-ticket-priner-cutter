@@ -204,7 +204,7 @@ class APIHandlers:
                     'message': "Missing request data"
                 }), 400
 
-            required_fields = ['logo', 'qr_url', 'time', 'user', 'device', 'fault_data', 'notice', 'extra']
+            required_fields = ['qr_url', 'time', 'user', 'device', 'fault_data', 'notice', 'extra']
             for field in required_fields:
                 if field not in data:
                     return jsonify({
@@ -280,7 +280,28 @@ class APIHandlers:
             except:
                 width_mm, height_mm = 50, 40
             logger.info(f"Label size: {width_mm}x{height_mm}mm")
-            tspl_commands = [
+            
+            # 203dpi 转换为 mm
+            dpi = 203
+            mm_to_dpi = 25.4 / dpi
+            # 计算标签尺寸
+            label_width = int(width_mm / mm_to_dpi)
+            label_height = int(height_mm / mm_to_dpi)
+            
+            # 定义常量
+            font = "\"TSS24.BF2\""
+            font_width = 14
+            font_height = 24
+            common_padding = 10
+            line_bottom = 3
+            qr_code_size = 80
+            max_usable_height = label_height - common_padding * 2  # 可用高度，去除上下边距
+            
+            # 存储所有标签的TSPL命令
+            all_labels_commands = []
+            
+            # 初始标签基本设置命令
+            label_init_commands = [
                 f"SIZE {width_mm} mm,{height_mm} mm",
                 "GAP 2 mm,0 mm",
                 "DIRECTION 1",
@@ -288,102 +309,162 @@ class APIHandlers:
                 "SPEED 6",
                 "CLS"
             ]
-            font = "\"2\""
-            font_width = 12
-            font_height = 20
-            common_padding = 10
-            line_botton = 3
-
-            # 203dpi 转换为 mm
-            dpi = 203
-            mm_to_dpi = 25.4 / dpi
-            # 计算标签尺寸
-            label_width = int(width_mm / mm_to_dpi)
-            label_height = int(height_mm / mm_to_dpi)
-            # 打印二维码
-            qr_code_size = 60
+            
+            current_label_commands = label_init_commands.copy()
+            y_offset = common_padding  # 初始y偏移设为上边距
+            
+            # 打印二维码 (仅第一张标签)
             qr_code_x = int(label_width - qr_code_size - common_padding)
             qr_code_y = int(common_padding)
             qr_code_data = data.get('qr_url', '')
-            tspl_commands.append(f"QRCODE {qr_code_x},{qr_code_y},H,2,A,0,\"{qr_code_data}\"")
-
-            # 记录 y_offset 位置
-            y_offset = 10
-            # 打印标签时间
+            current_label_commands.append(f"QRCODE {qr_code_x},{qr_code_y},H,2,A,0,\"{qr_code_data}\"")
+            
+            # 预处理要打印的内容项
+            content_items = []
+            
+            # 添加时间信息
             label_time = data.get('time', '')
-            # 计算文本块大小
-            text, block_width, block_height = self._calc_block_size(label_time, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
-            tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
-            y_offset += block_height + line_botton
-            # tspl_commands.append(f"TEXT {common_padding},{y_offset},{font},0,1,1,\"{label_time}\"")
-            # 打印标签用户
+            text, block_width, block_height = self._calc_block_size(label_time, font_width, font_height, 
+                                                               label_width - common_padding * 2 - qr_code_size)
+            content_items.append({
+                'text': text, 
+                'width': block_width, 
+                'height': block_height, 
+                'indent': 0,
+                'type': 'normal'
+            })
+            
+            # 添加用户信息
             label_user = data.get('user', '')
-            # 计算文本块大小
-            text, block_width, block_height = self._calc_block_size(label_user, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
-            tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
-            y_offset += block_height + line_botton
-
-            # 打印标签设备
+            text, block_width, block_height = self._calc_block_size(label_user, font_width, font_height, 
+                                                              label_width - common_padding * 2 - qr_code_size)
+            content_items.append({
+                'text': text, 
+                'width': block_width, 
+                'height': block_height, 
+                'indent': 0,
+                'type': 'normal'
+            })
+            
+            # 添加设备信息
             label_device = data.get('device', '')
-            # 计算文本块大小
-            text, block_width, block_height = self._calc_block_size(label_device, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
-            tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
-            y_offset += block_height + line_botton
-
-            # 打印分隔线
-            tspl_commands.append(f"BAR {common_padding},{y_offset},{label_width - common_padding * 2},2")
-            y_offset += 2 + line_botton
-
-            # 打印故障信息
+            text, block_width, block_height = self._calc_block_size(label_device, font_width, font_height, 
+                                                              label_width - common_padding * 2 - qr_code_size)
+            content_items.append({
+                'text': text, 
+                'width': block_width,
+                'height': block_height, 
+                'indent': 0,
+                'type': 'normal'
+            })
+            
+            # 添加分隔线
+            content_items.append({
+                'type': 'separator',
+                'width': label_width - common_padding * 2 - qr_code_size - 10,
+                'height': 2 + line_bottom
+            })
+            
+            # 添加故障信息
             fault_data = data.get('fault_data', [])
             if fault_data and isinstance(fault_data, list):
                 for i, fault in enumerate(fault_data):
                     fault_name = fault.get('fault_name', f'{i+1}')
-                    # 计算文本块大小
-                    text, block_width, block_height = self._calc_block_size(fault_name, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
-                    tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
-                    y_offset += block_height + line_botton
-
-                    # 打印故障处理计划
+                    text, block_width, block_height = self._calc_block_size(fault_name, font_width, font_height, 
+                                                                      label_width - common_padding * 2)
+                    content_items.append({
+                        'text': text, 
+                        'width': block_width, 
+                        'height': block_height, 
+                        'indent': 0,
+                        'type': 'normal'
+                    })
+                    
+                    # 添加故障处理计划
                     if 'fault_plan' in fault and isinstance(fault['fault_plan'], list):
-                        for j, plan in enumerate(fault['fault_plan']):
-                            # 计算文本块大小
-                            text, block_width, block_height = self._calc_block_size(plan, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
-                            tspl_commands.append(f"BLOCK {common_padding + 10},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
-                            y_offset += block_height + line_botton
-
-
-            # 打印分隔线
-            tspl_commands.append(f"BAR {common_padding},{y_offset},{label_width - common_padding * 2},2")
-            y_offset += 2 + line_botton
-            # 打印注意事项
+                        for plan in fault['fault_plan']:
+                            text, block_width, block_height = self._calc_block_size(f"- {plan}", font_width, font_height,
+                                                                             label_width - common_padding * 2 - 10)
+                            content_items.append({
+                                'text': text, 
+                                'width': block_width, 
+                                'height': block_height, 
+                                'indent': 10,  # 缩进10单位
+                                'type': 'normal'
+                            })
+            
+            # 添加分隔线
+            content_items.append({
+                'type': 'separator',
+                'width': label_width - common_padding * 2,
+                'height': 2 + line_bottom
+            })
+            
+            # 添加注意事项
             notice = data.get('notice', [])
             if notice and isinstance(notice, list):
-                for i, notice_item in enumerate(notice):
-                    # 计算文本块大小
-                    text, block_width, block_height = self._calc_block_size(notice_item, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
-                    tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
-                    y_offset += block_height + line_botton
-            # 打印分隔线
-            tspl_commands.append(f"BAR {common_padding},{y_offset},{label_width - common_padding * 2},2")
-            y_offset += 2 + line_botton
-            # 打印额外信息
+                for notice_item in notice:
+                    text, block_width, block_height = self._calc_block_size(notice_item, font_width, font_height, 
+                                                                     label_width - common_padding * 2)
+                    content_items.append({
+                        'text': text, 
+                        'width': block_width, 
+                        'height': block_height, 
+                        'indent': 0,
+                        'type': 'normal'
+                    })
+
+            
+            # 添加额外信息
             extra = data.get('extra', [])
             if extra and isinstance(extra, list):
-                for i, extra_item in enumerate(extra):
-                    # 计算文本块大小
-                    text, block_width, block_height = self._calc_block_size(extra_item, font_width, font_height, label_width - common_padding * 2 - qr_code_size)
-                    tspl_commands.append(f"BLOCK {common_padding},{y_offset},{block_width},{block_height},{font},0,1,1,\"{text}\"")
-                    y_offset += block_height + line_botton
-
-
-            # 最后结束
-            tspl_commands.append(f"PRINT 1")
-            tspl_commands.append("END")
-
-            return tspl_commands
+                for extra_item in extra:
+                    text, block_width, block_height = self._calc_block_size(extra_item, font_width, font_height, 
+                                                                     label_width - common_padding * 2)
+                    content_items.append({
+                        'text': text, 
+                        'width': block_width, 
+                        'height': block_height, 
+                        'indent': 0,
+                        'type': 'normal'
+                    })
+            
+            # 遍历所有内容项，根据高度自动分页
+            for item in content_items:
+                item_height = item['height']
+                
+                # 检查当前项是否会超出当前标签的可用高度
+                if y_offset + item_height > max_usable_height:
+                    # 完成当前标签
+                    current_label_commands.append("PRINT 1")
+                    current_label_commands.append("END")
+                    all_labels_commands.extend(current_label_commands)
+                    
+                    # 创建新标签
+                    current_label_commands = label_init_commands.copy()
+                    y_offset = common_padding  # 重置y偏移量
+                
+                # 添加当前项到标签
+                if item['type'] == 'separator':
+                    item_width = item['width']
+                    current_label_commands.append(f"BAR {common_padding},{y_offset},{item_width},{item_height - line_bottom}")
+                else:
+                    indent = item.get('indent', 0)
+                    x_position = common_padding + indent
+                    current_label_commands.append(f"BLOCK {x_position},{y_offset},{item['width']},{item['height']},{font},0,1,1,\"{item['text']}\"")
+                
+                # 更新y偏移量
+                y_offset += item_height
+            
+            # 完成最后一张标签
+            current_label_commands.append("PRINT 1")
+            current_label_commands.append("END")
+            all_labels_commands.extend(current_label_commands)
+            
+            return all_labels_commands
 
         except Exception as e:
             logger.error(f"Error formatting engineer order label: {e}")
+            traceback.print_exc()
             return f"Error: Could not format engineer order - {str(e)}"
 

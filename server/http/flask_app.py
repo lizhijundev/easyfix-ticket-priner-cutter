@@ -1,6 +1,6 @@
 # server/http/flask_app.py
 from flask import Flask, jsonify, render_template_string
-
+from flask_cors import CORS
 from server.http.api_handlers import APIHandlers
 from server.http.templates import Templates
 from utils.logger import setup_logger
@@ -12,6 +12,7 @@ def create_flask_app(printer):
     Creates and configures a Flask application
     """
     app = Flask(__name__)
+    CORS(app, resources={r"/*": {"origins": "*"}})
     api_handlers = APIHandlers(printer)
     
     # Status pages
